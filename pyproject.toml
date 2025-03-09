@@ -6,7 +6,7 @@ readme = "README.md"
 authors = [
     { name = "akongstad", email = "kongstad@outlook.com" }
 ]
-requires-python = ">=3.13"
+requires-python = ">=3.9"
 dependencies = [
     "pyspark>=3.5.5",
     "requests>=2.32.3",
