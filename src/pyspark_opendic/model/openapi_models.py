@@ -2,7 +2,6 @@ from pydantic import BaseModel
 from typing import Any, List, Dict, Optional
 from typing import Literal
 
-
 class Udo(BaseModel):
     type: str
     name: str
@@ -17,7 +16,7 @@ class Udos(BaseModel):
 
 
 class CreateUdoRequest(BaseModel):
-    object: Udo  # A single Udo object that will be created
+    udo: Udo  # A single Udo object that will be created
 
 
 class DefineUdoRequest(BaseModel):

@@ -58,7 +58,7 @@ class OpenDicCatalog(Catalog):
             except json.JSONDecodeError as e:
                 return {
                     "error": "Invalid JSON syntax in properties",
-                    "details": {"sql": sqlText, "exception_message": e.msg}
+                    "details": {"sql": sqlText, "exception_message": str(e)}
                 }
 
             # Build Udo and CreateUdoRequest models
