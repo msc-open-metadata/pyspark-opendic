@@ -1,6 +1,6 @@
 [project]
 name = "pyspark-opendic"
-version = "0.1.1"
+version = "0.1.2"
 description = "Add your description here"
 readme = "README.md"
 authors = [
@@ -9,6 +9,7 @@ authors = [
 ]
 requires-python = ">=3.9"
 dependencies = [
+    "pydantic>=2.10.6",
     "pyspark>=3.5.5",
     "requests>=2.32.3",
 ]

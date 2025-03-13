@@ -2,7 +2,7 @@ import pytest
 import requests
 from unittest.mock import patch
 from pyspark_opendic.client import OpenDicClient
-from pyspark_opendic.model.create_object_request import CreateObjectRequest
+from pyspark_opendic.model.openapi_models import CreateUdoRequest
 
 # Test client is correctly called with the right URL & data
 # TODO: add test on OAuth handling
@@ -27,14 +27,14 @@ def test_post_function(mock_post : requests.post, client):
     mock_post.return_value.json.return_value = {"success": True}
 
     dict_props = {"args": {"arg1": "string", "arg2": "number"}, "language": "sql"}
-    payload = CreateObjectRequest("function", "my_function", None, dict_props).to_json()
+    payload = CreateUdoRequest(object={"type": "function", "name": "my_function", "props": dict_props}).model_dump_json()
 
     # Call the actual function (this normally calls requests.post - which is replaced with mock_post here)
-    response = client.post("/functions", payload)
+    response = client.post("/objects/functions", payload)
 
     # Verify that requests.post was actually called with the right URL & data
     mock_post.assert_called_with(
-        f"{MOCK_API_URL}/functions",
+        f"{MOCK_API_URL}/opendic/v1/objects/functions",
         json = payload,
         headers = {"Authorization": "Bearer mocked_token"}
     )
@@ -52,11 +52,11 @@ def test_get_function(mock_get : requests.get, client):
     mock_get.return_value.json.return_value = {"success": True}
 
     # Call the actual function
-    response = client.get("/functions")
+    response = client.get("/objects/functions")
 
     # Verify that requests.get was actually called with the right URL
     mock_get.assert_called_with(
-        f"{MOCK_API_URL}/functions",
+        f"{MOCK_API_URL}/opendic/v1/objects/functions",
         headers={"Authorization": "Bearer mocked_token"}
     )
 

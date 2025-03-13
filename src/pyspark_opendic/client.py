@@ -1,6 +1,7 @@
 import requests
 
-#TODO: Add handling for credentials for client OAuth
+# TODO: Add handling for credentials for client OAuth
+# TODO: Find a better way to handle the url
 class OpenDicClient:
     def __init__(self, api_url : str, credentials : str):
         self.api_url = api_url
@@ -8,13 +9,14 @@ class OpenDicClient:
         self.oauth_token = self.get_polaris_oauth_token(credentials)
 
     def post(self, endpoint, data):
-        url = self.api_url + endpoint
+        url = self.api_url+ "/opendic/v1" + endpoint
         response = requests.post(url, json=data, headers={"Authorization": f"Bearer {self.oauth_token}"})
+        print("URL:", url)
         response.raise_for_status() # Raise an exception if the response is not successful
         return response.json()
     
     def get(self, endpoint):
-        url = self.api_url + endpoint
+        url = self.api_url + "/opendic/v1" + endpoint
         response = requests.get(url, headers={"Authorization": f"Bearer {self.oauth_token}"})
         response.raise_for_status() # Raise an exception if the response is not successful
         return response.json()

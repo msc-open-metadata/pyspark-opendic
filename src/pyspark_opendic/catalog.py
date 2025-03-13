@@ -4,7 +4,10 @@ import re
 import requests
 import json
 from pyspark_opendic.client import OpenDicClient
-from pyspark_opendic.model.create_object_request import CreateObjectRequest
+
+from pyspark_opendic.model.openapi_models import CreateUdoRequest
+from pyspark_opendic.model.openapi_models import Udo, PlatformMapping, SnowflakePlatformMapping, SparkPlatformMapping  # Import updated models
+
 
 
 class OpenDicCatalog(Catalog):
@@ -13,10 +16,7 @@ class OpenDicCatalog(Catalog):
         
         credentials = sparkSession.conf.get("spark.sql.catalog.polaris.credential")
         self.client = OpenDicClient(api_url, credentials)
-        #TODO: add handling for credentials for client OAuth
         
-
-    # TODO: 'Create Mapping' .. Could maybe just be another UDO
     def sql(self, sqlText : str):
         query_cleaned = sqlText.strip()
 
@@ -52,22 +52,28 @@ class OpenDicCatalog(Catalog):
             alias = create_match.group('alias')
             properties = create_match.group('properties')  
 
-            # Handle properties as JSON if present
+            # Parse props as JSON - this serves as a basic syntax check on the JSON input and default to None for consistency
             try:
-                # This serves to both check if the properties are valid JSON, and parse the raw JSON string into a Python dict (or None for consistency)
-                properties = json.loads(properties) if properties else None
+                props = json.loads(properties) if properties else None
             except json.JSONDecodeError as e:
                 return {
                     "error": "Invalid JSON syntax in properties",
                     "details": {"sql": sqlText, "exception_message": e.msg}
                 }
 
-            payload = CreateObjectRequest(object_type, name, alias, properties).to_json()
+            # Build Udo and CreateUdoRequest models
+            udo = Udo(type=object_type, name=name, props=props)
+            create_request = CreateUdoRequest(object=udo)
+
+            # Serialize to JSON
+            payload = create_request.model_dump_json()
             
-            try :
+            # Send Request
+            try:
                 response = self.client.post(f"/objects/{object_type}", payload)
             except requests.exceptions.HTTPError as e:
-                return {"error": "HTTP Error", "exception message": e.msg}
+                return {"error": "HTTP Error", "exception message": str(e)}
+
             return {"success": "Object created successfully", "response": response}
         
         elif show_match:
@@ -75,7 +81,7 @@ class OpenDicCatalog(Catalog):
             try :
                 response = self.client.get(f"/objects/{object_type}")
             except requests.exceptions.HTTPError as e:
-                return {"error": "HTTP Error", "exception message": e.msg}
+                return {"error": "HTTP Error", "exception message": str(e)}
             return {"success": "Object retrieved successfully", "response": response}
 
         # Fallback to Spark parser

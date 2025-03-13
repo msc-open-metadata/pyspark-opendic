@@ -1,13 +1,10 @@
 import pytest
 from unittest.mock import MagicMock, patch
-from pyspark_opendic.catalog import OpenDicCatalog, OpenDicClient
+from pyspark_opendic.catalog import OpenDicCatalog
 import json
-
-from pyspark_opendic.model.create_object_request import CreateObjectRequest
-
+from pyspark_opendic.model.openapi_models import CreateUdoRequest
 
 MOCK_API_URL = "https://mock-api-url.com"
-
 
 @pytest.fixture
 def mock_spark():
@@ -21,11 +18,8 @@ def catalog(mock_get_token, mock_spark):
     mock_spark.conf.get.return_value = "mock_client_id:mock_client_secret"
     return OpenDicCatalog(mock_spark, MOCK_API_URL)
 
-
 @patch('pyspark_opendic.client.OpenDicClient.post')
 def test_create_with_props(mock_post, catalog):
-    # Test the CREATE SQL with PROPS JSON
-
     mock_post.return_value = {"success": True}
 
     query = """
@@ -39,71 +33,46 @@ def test_create_with_props(mock_post, catalog):
     }
     """
 
-
     dict_props = {"args": {"arg1": "string", "arg2": "number"}, "language": "sql"}
-    expected_payload = CreateObjectRequest("function", "my_function", None, dict_props).to_json()
+    expected_payload = CreateUdoRequest(object={"type": "function", "name": "my_function", "props": dict_props}).model_dump_json()
 
-    # Call the sql method on the catalog with the query
     response = catalog.sql(query)
 
-    # Parse the payload to ensure it matches
-    mock_post.assert_called_once_with("/function", expected_payload)
-    
+    mock_post.assert_called_once_with("/objects/function", expected_payload)
     assert response == {"success": "Object created successfully", "response": {"success": True}}
-    #assert response == {"success": True}
 
 @patch('pyspark_opendic.client.OpenDicClient.post')
 def test_create_without_props(mock_post, catalog):
-    # Test CREATE without PROPS JSON
-
     mock_post.return_value = {"success": True}
 
     query = """
     CREATE OPEN function my_table_func
     """
 
-    expected_payload = {
-        "type": "function",
-        "name": "my_table_func",
-        "alias": None,
-        "props": None
-    }
+    expected_payload = CreateUdoRequest(object={"type": "function", "name": "my_table_func", "props": None}).model_dump_json()
 
-    # Call the sql method on the catalog with the query
     response = catalog.sql(query)
 
-    mock_post.assert_called_once_with("/function", json.dumps(expected_payload))
+    mock_post.assert_called_once_with("/objects/function", expected_payload)
     assert response == {"success": "Object created successfully", "response": {"success": True}}
 
 @patch('pyspark_opendic.client.OpenDicClient.post')
 def test_create_with_alias(mock_post, catalog):
-    # Test CREATE with an alias
-
     mock_post.return_value = {"success": True}
 
     query = """
     CREATE OPEN function my_function AS my_alias
     """
 
-    expected_payload = {
-        "type": "function",
-        "name": "my_function",
-        "alias": "my_alias",
-        "props": None
-    }
+    expected_payload = CreateUdoRequest(object={"type": "function", "name": "my_function", "props": None}).model_dump_json()
 
-    # Call the sql method on the catalog with the query
     response = catalog.sql(query)
 
-    mock_post.assert_called_once_with("/function", json.dumps(expected_payload))
+    mock_post.assert_called_once_with("/objects/function", expected_payload)
     assert response == {"success": "Object created successfully", "response": {"success": True}}
 
 @patch('pyspark_opendic.client.OpenDicClient.post')
 def test_invalid_json_in_props(mock_post, catalog):
-    # Test invalid JSON in PROPS (missing closing brace)
-
-    mock_post.return_value = {"success": True}
-
     query = """
     CREATE OPEN function my_function 
     PROPS {
@@ -114,8 +83,7 @@ def test_invalid_json_in_props(mock_post, catalog):
         "language": "sql"
     """
 
-    # Call the sql method on the catalog with the query
     response = catalog.sql(query)
 
-    # Ensure the response contains the correct error message
     assert "error" in response
+    assert response["error"] == "Invalid JSON syntax in properties"
