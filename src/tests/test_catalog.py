@@ -15,9 +15,12 @@ def mock_spark():
     return MagicMock()
 
 @pytest.fixture
-def catalog(mock_spark):
-    """Creates an instance of PolarisXCatalog with mock Spark."""
+@patch('pyspark_opendic.client.OpenDicClient.get_polaris_oauth_token', return_value="mocked_token")
+def catalog(mock_get_token, mock_spark):
+    """Creates an instance of OpenDicCatalog with mock Spark and mock credentials."""
+    mock_spark.conf.get.return_value = "mock_client_id:mock_client_secret"
     return OpenDicCatalog(mock_spark, MOCK_API_URL)
+
 
 @patch('pyspark_opendic.client.OpenDicClient.post')
 def test_create_with_props(mock_post, catalog):

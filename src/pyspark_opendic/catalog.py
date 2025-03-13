@@ -10,9 +10,13 @@ from pyspark_opendic.model.create_object_request import CreateObjectRequest
 class OpenDicCatalog(Catalog):
     def __init__(self, sparkSession : SparkSession, api_url : str):
         self.sparkSession = sparkSession
-        self.client = OpenDicClient(api_url)
+        
+        credentials = sparkSession.conf.get("spark.sql.catalog.polaris.credential")
+        self.client = OpenDicClient(api_url, credentials)
         #TODO: add handling for credentials for client OAuth
+        
 
+    # TODO: 'Create Mapping' .. Could maybe just be another UDO
     def sql(self, sqlText : str):
         query_cleaned = sqlText.strip()
 

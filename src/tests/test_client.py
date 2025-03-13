@@ -11,13 +11,16 @@ from pyspark_opendic.model.create_object_request import CreateObjectRequest
 
 MOCK_API_URL = "https://mock-api-url.com"
 
+@pytest.fixture
+@patch('pyspark_opendic.client.OpenDicClient.get_polaris_oauth_token', return_value="mocked_token")
+def client(mock_get_token):
+    """Creates an instance of OpenDicClient."""
+    return OpenDicClient(MOCK_API_URL, "s:s")
+
 
 @patch("requests.post")
-def test_post_function(mock_post : requests.post):
+def test_post_function(mock_post : requests.post, client):
     """Test if the OpenDicClient correctly sends a POST request."""
-    
-    # Create an instance of the clint
-    client = OpenDicClient(MOCK_API_URL)
 
     # Fake the API response on the mock object (the requests.post function)
     mock_post.return_value.status_code = 200
@@ -32,7 +35,8 @@ def test_post_function(mock_post : requests.post):
     # Verify that requests.post was actually called with the right URL & data
     mock_post.assert_called_with(
         f"{MOCK_API_URL}/functions",
-        json = payload
+        json = payload,
+        headers = {"Authorization": "Bearer mocked_token"}
     )
 
     # Check if we got the expected response
@@ -40,12 +44,9 @@ def test_post_function(mock_post : requests.post):
 
 # TODO: obs. not sure about the return format of SHOW yet, so this test is a placeholder
 @patch("requests.get")
-def test_get_function(mock_get : requests.get):
+def test_get_function(mock_get : requests.get, client):
     """Test if OpenDicClient correctly sends a GET request."""
     
-    # Create an instance of the clint
-    client = OpenDicClient(MOCK_API_URL)
-
     # Fake the API response on the mock object (the requests.get function)
     mock_get.return_value.status_code = 200
     mock_get.return_value.json.return_value = {"success": True}
@@ -55,7 +56,8 @@ def test_get_function(mock_get : requests.get):
 
     # Verify that requests.get was actually called with the right URL
     mock_get.assert_called_with(
-        f"{MOCK_API_URL}/functions"
+        f"{MOCK_API_URL}/functions",
+        headers={"Authorization": "Bearer mocked_token"}
     )
 
     # Check if we got the expected response
