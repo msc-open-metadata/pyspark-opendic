@@ -65,7 +65,7 @@ class OpenDicCatalog(Catalog):
             payload = CreateObjectRequest(object_type, name, alias, properties).to_json()
             
             try :
-                response = self.client.post(f"/{object_type}", payload)
+                response = self.client.post(f"/objects/{object_type}", payload)
             except requests.exceptions.HTTPError as e:
                 return {"error": "HTTP Error", "exception message": e.msg}
             return {"success": "Object created successfully", "response": response}
@@ -73,7 +73,7 @@ class OpenDicCatalog(Catalog):
         elif show_match:
             object_type = show_match.group('object_type')
             try :
-                response = self.client.get(f"/{object_type}")
+                response = self.client.get(f"/objects/{object_type}")
             except requests.exceptions.HTTPError as e:
                 return {"error": "HTTP Error", "exception message": e.msg}
             return {"success": "Object retrieved successfully", "response": response}
