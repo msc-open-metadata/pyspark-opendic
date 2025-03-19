@@ -78,11 +78,14 @@ class OpenDicCatalog(Catalog):
             # Send Request
             try:
                 response = self.client.post(f"/objects/{object_type}", payload)
-                # TODO: pull/sync the object type
+                # Sync the object of said type after creation
+                sync_response = self.client.get(f"/objects/{object_type}/sync")
+                dump_handler_response = self.dump_handler(sync_response)
             except requests.exceptions.HTTPError as e:
                 return {"error": "HTTP Error", "exception message": str(e)}
 
-            return {"success": "Object created successfully", "response": response}
+            return {"success": "Object created successfully", "response": response
+                    , "sync_response": dump_handler_response}
         
         elif show_match:
             object_type = show_match.group('object_type')
