@@ -2,7 +2,7 @@ import pytest
 import requests
 from unittest.mock import patch
 from pyspark_opendic.client import OpenDicClient
-from pyspark_opendic.model.openapi_models import CreateUdoRequest
+from pyspark_opendic.model.openapi_models import CreateUdoRequest, Udo
 
 # Test client is correctly called with the right URL & data
 # TODO: add test on OAuth handling
@@ -26,8 +26,9 @@ def test_post_function(mock_post : requests.post, client):
     mock_post.return_value.status_code = 200
     mock_post.return_value.json.return_value = {"success": True}
 
-    dict_props = {"args": {"arg1": "string", "arg2": "number"}, "language": "sql"}
-    payload = CreateUdoRequest(object={"type": "function", "name": "my_function", "props": dict_props}).model_dump_json()
+    dict_props = {"args": {"arg1": "string", "arg2": "number"}, "language": "sql", "definition": "SELECT * FROM my_table"}
+    udo_object = Udo(type = "function", name = "my_function", props = dict_props)
+    payload = CreateUdoRequest(udo = udo_object).model_dump_json()
 
     # Call the actual function (this normally calls requests.post - which is replaced with mock_post here)
     response = client.post("/objects/functions", payload)

@@ -69,8 +69,8 @@ class OpenDicCatalog(Catalog):
                 }
 
             # Build Udo and CreateUdoRequest models
-            udo = Udo(type=object_type, name=name, props=props)
-            create_request = CreateUdoRequest(object=udo)
+            udo_object = Udo(type=object_type, name=name, props=props)
+            create_request = CreateUdoRequest(udo=udo_object)
 
             # Serialize to JSON
             payload = create_request.model_dump_json()
@@ -94,7 +94,7 @@ class OpenDicCatalog(Catalog):
             except requests.exceptions.HTTPError as e:
                 return {"error": "HTTP Error", "exception message": str(e)}
             
-            return {"success": "Object retrieved successfully", "response": response}
+            return {"success": "Objects retrieved successfully", "response": response}
         
         elif sync_match: # TODO: support for both sync all or just sync just one object - but this would be handled at Polaris-side
             object_type = sync_match.group('object_type')
@@ -131,7 +131,7 @@ class OpenDicCatalog(Catalog):
             if sql_text:
                 try:
                     result = self.sparkSession.sql(sql_text)  # Execute in Spark
-                    execution_results.append({"sql": sql_text, "status": "executed", "result": result})
+                    execution_results.append({"sql": sql_text, "status": "executed"}) # "result": result
                 except Exception as e:
                     execution_results.append({"sql": sql_text, "status": "failed", "error": str(e)})
 

@@ -1,11 +1,11 @@
 from pydantic import BaseModel
-from typing import Any, List, Dict, Optional
+from typing import Any, List, Optional
 from typing import Literal
 
 class Udo(BaseModel):
     type: str
     name: str
-    props: Optional[Dict[str, Any]] = None
+    props: Optional[dict[str, Any]] = None
     createTimestamp: Optional[int] = None
     lastUpdateTimestamp: Optional[int] = None
     entityVersion: Optional[int] = None
@@ -18,7 +18,7 @@ class CreateUdoRequest(BaseModel):
 
 class DefineUdoRequest(BaseModel):
     udoType: str  # Type of the object
-    properties: Dict[str, str]  # Properties of the object
+    properties: dict[str, str]  # Properties of the object
 
 class PullUdoRequest(BaseModel):
     Udos: Udos  # A list of Udo objects
@@ -32,10 +32,10 @@ class PlatformMappings(BaseModel):
     items: List[PlatformMapping]  # A list of platform mappings
 
 class SnowflakePlatformMapping(BaseModel):
-    jsonMapping: Dict[str, str]  # Mapping in JSON format
+    jsonMapping: dict[str, str]  # Mapping in JSON format
 
 class SparkPlatformMapping(BaseModel):
-    jsonMapping: Dict[str, str]  # Mapping in JSON format
+    jsonMapping: dict[str, str]  # Mapping in JSON format
 
 class CreatePlatformMappingRequest(BaseModel):
     platformMapping: PlatformMapping  # The platform mapping to be created
