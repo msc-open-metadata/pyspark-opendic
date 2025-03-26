@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import MagicMock, patch
 from pyspark_opendic.catalog import OpenDicCatalog
 import json
-from pyspark_opendic.model.openapi_models import CreateUdoRequest, Udo
+from pyspark_opendic.model.openapi_models import CreateUdoRequest, DefineUdoRequest, Udo
 
 MOCK_API_URL = "https://mock-api-url.com"
 
@@ -88,6 +88,7 @@ def test_create_with_alias(mock_get, mock_post, catalog):
     mock_post.assert_called_once_with("/objects/function", expected_payload)
     assert response == {'success': 'Object created successfully', 'response': {'success': True}, 'sync_response': {'success': True, 'executions': [{'sql': 'CREATE OR REPLACE FUNCTION my_function as my_alias', 'status': 'executed'}]}}
 
+
 # ---- Tests for Pydantic INVALID JSON ----
 @patch('pyspark_opendic.client.OpenDicClient.post')
 def test_invalid_json_in_props(mock_post, catalog):
@@ -134,3 +135,43 @@ def test_sync_function(mock_get, catalog):
     mock_get.assert_called_once_with("/objects/function/sync")
     #mock_spark.sql.assert_called_once_with("CREATE OR REPLACE FUNCTION my_function AS 'SELECT 1';")
     assert response == {'success': True, 'executions': [{'sql': "CREATE OR REPLACE FUNCTION my_function AS 'SELECT 1';", 'status': 'executed'}]}
+
+
+# ---- Tests for DEFINE ----
+@patch('pyspark_opendic.client.OpenDicClient.post')
+def test_define(mock_post, catalog):
+    mock_post.return_value = {"success": True}
+
+    query = """
+    DEFINE OPEN function PROPS { "language": "string", "version": "string", "def":"string"}
+    """
+
+    expected_payload = DefineUdoRequest(udoType = "function", properties = {"language": "string", "version": "string", "def":"string"}).model_dump_json()
+
+
+    response = catalog.sql(query)
+
+    mock_post.assert_called_once_with("/objects", expected_payload)
+    assert response == {'success': 'Object defined successfully', 'response': {'success': True}}
+
+@patch('pyspark_opendic.client.OpenDicClient.post')
+def test_define_invalid_json(mock_post, catalog):
+    query = """
+    DEFINE OPEN function PROPS {"language" "string", "version": "string, "def":"string"}
+    """
+
+    response = catalog.sql(query)
+
+    assert "error" in response
+    assert response["error"] == "Invalid JSON syntax in properties"
+
+@patch('pyspark_opendic.client.OpenDicClient.post')
+def test_define_pydantic_error(mock_post, catalog):
+    query = """
+    DEFINE OPEN function
+    """
+
+    response = catalog.sql(query)
+
+    assert response["error"] == "Error defining object"
+    assert "validation error" in response["exception message"]

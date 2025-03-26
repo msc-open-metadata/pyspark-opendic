@@ -82,9 +82,12 @@ class OpenDicCatalog(Catalog):
                 }
 
             # Build Udo and CreateUdoRequest models
-            udo_object = Udo(type=object_type, name=name, props=props)
-            create_request = CreateUdoRequest(udo=udo_object)
-
+            try:
+                udo_object = Udo(type=object_type, name=name, props=props)
+                create_request = CreateUdoRequest(udo=udo_object)
+            except Exception as e:
+                return {"error": "Error creating object", "exception message": str(e)}
+            
             # Serialize to JSON
             payload = create_request.model_dump_json()
             
@@ -132,7 +135,10 @@ class OpenDicCatalog(Catalog):
                 }
 
             # Build Udo and CreateUdoRequest models
-            define_request = DefineUdoRequest(udoType=udoType, properties=props)
+            try:
+                define_request = DefineUdoRequest(udoType=udoType, properties=props)
+            except Exception as e:
+                return {"error": "Error defining object", "exception message": str(e)}
 
             # Serialize to JSON
             payload = define_request.model_dump_json()
@@ -142,6 +148,8 @@ class OpenDicCatalog(Catalog):
                 response = self.client.post(f"/objects", payload)
             except requests.exceptions.HTTPError as e:
                 return {"error": "HTTP Error", "exception message": str(e)}
+            
+            return {"success": "Object defined successfully", "response": response}
             
         # Fallback to Spark parser
         return self.sparkSession.sql(sqlText)
