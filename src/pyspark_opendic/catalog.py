@@ -5,7 +5,7 @@ import requests
 import json
 from pyspark_opendic.client import OpenDicClient
 
-from pyspark_opendic.model.openapi_models import CreateUdoRequest
+from pyspark_opendic.model.openapi_models import CreateUdoRequest, DefineUdoRequest
 from pyspark_opendic.model.openapi_models import Udo, PlatformMapping, SnowflakePlatformMapping, SparkPlatformMapping  # Import updated models
 
 
@@ -21,36 +21,49 @@ class OpenDicCatalog(Catalog):
         query_cleaned = sqlText.strip()
 
         # TODO: do some systematic syntax union - include alias 'as', etc.
-        # TODO: add support for 'or replace' and 'temporary' keywords etc. on catalog-side - not a priority for now
+        # TODO: add support for 'or replace' and 'temporary' keywords etc. on catalog-side - not a priority for now, so just ignore
         # Syntax: CREATE [OR REPLACE] [TEMPORARY] OPEN <object_type> <name> [IF NOT EXISTS] [AS <alias>] [PROPS { <properties> }]
         opendic_create_pattern = (
-            r"^create"                               # "create" at the start
-            r"(?:\s+or\s+replace)?"                  # Optional "or replace"
-            r"(?:\s+temporary)?"                     # Optional "temporary"
-            r"\s+open\s+(?P<object_type>\w+)"        # Required object type after "open"
-            r"\s+(?P<name>\w+)"                      # Required name of the object
-            r"(?:\s+if\s+not\s+exists)?"             # Optional "if not exists"
-            r"(?:\s+as\s+(?P<alias>\w+))?"           # Optional alias after "as"
-            r"(?:\s+props\s*(?P<properties>\{[\s\S]*\}))?" # Optional "props" keyword, but curly braces are mandatory if present - This is a JSON object
+            r"^create"                                      # "create" at the start
+            r"(?:\s+or\s+replace)?"                         # Optional "or replace"
+            r"(?:\s+temporary)?"                            # Optional "temporary"
+            r"\s+open\s+(?P<object_type>\w+)"               # Required object type after "open"
+            r"\s+(?P<name>\w+)"                             # Required name of the object
+            r"(?:\s+if\s+not\s+exists)?"                    # Optional "if not exists"
+            r"(?:\s+as\s+(?P<alias>\w+))?"                  # Optional alias after "as"
+            r"(?:\s+props\s*(?P<properties>\{[\s\S]*\}))?"  # Optional "props" keyword, but curly braces are mandatory if present - This is a JSON object
         )
-        # TODO: Add pattern match for Show, Describe, Drop, etc.
 
+        # Syntax: SHOW OPEN <object_type>[s]
+        # Example: SHOW OPEN functions
         opendic_show_pattern = (
-            r"^show"                                 # "show" at the start
-            r"\s+open\s+(?P<object_type>\w+)"        # Required object type after "open"
-            r"s?"                                    # Optionally match a trailing "s"
+            r"^show"                                        # "show" at the start
+            r"\s+open\s+(?P<object_type>\w+)"               # Required object type after "open"
+            r"s?"                                           # Optionally match a trailing "s"
         )
 
+        # Syntax: SYNC OPEN <object_type>[s]
+        # Example: SYNC OPEN functions
         opendic_sync_pattern = (
-            r"^sync"                                 # "sync" at the start
-            r"\s+open\s+(?P<object_type>\w+)"        # Required object type after "open"
-            r"s?"                                    # Optionally match a trailing "s"
+            r"^sync"                                        # "sync" at the start
+            r"\s+open\s+(?P<object_type>\w+)"               # Required object type after "open"
+            r"s?"                                           # Optionally match a trailing "s"
         )
+
+        # Syntax: DEFINE OPEN <udoType> PROPS { <properties> }
+        # Example: sql = 'DEFINE OPEN function PROPS { "language": "string", "version": "string", "def":"string"}'
+        opendic_define_pattern = (
+            r"^define"                                      # "DEFINE" at the start
+            r"\s+open\s+(?P<udoType>\w+)"                   # Required UDO type (e.g., "function")
+            r"(?:\s+props\s*(?P<properties>\{[\s\S]*\}))?"  # REQUIRED PROPS with JSON inside {}
+        )
+
 
         # Check pattern matches
         create_match = re.match(opendic_create_pattern, query_cleaned, re.IGNORECASE)
         show_match = re.match(opendic_show_pattern, query_cleaned, re.IGNORECASE)
         sync_match = re.match(opendic_sync_pattern, query_cleaned, re.IGNORECASE)
+        define_match = re.match(opendic_define_pattern, query_cleaned, re.IGNORECASE)
 
 
         if create_match:
@@ -104,6 +117,31 @@ class OpenDicCatalog(Catalog):
                 return {"error": "HTTP Error", "exception message": str(e)}      
             
             return self.dump_handler(response) #obs. response is already made a Dict from the client}
+        
+        elif define_match:
+            udoType = define_match.group('udoType')
+            properties = define_match.group('properties')
+
+            # Parse props as JSON - this serves as a basic syntax check on the JSON input and default to None for consistency
+            try:
+                props = json.loads(properties) if properties else None
+            except json.JSONDecodeError as e:
+                return {
+                    "error": "Invalid JSON syntax in properties",
+                    "details": {"sql": sqlText, "exception_message": str(e)}
+                }
+
+            # Build Udo and CreateUdoRequest models
+            define_request = DefineUdoRequest(udoType=udoType, properties=props)
+
+            # Serialize to JSON
+            payload = define_request.model_dump_json()
+            
+            # Send Request
+            try:
+                response = self.client.post(f"/objects", payload)
+            except requests.exceptions.HTTPError as e:
+                return {"error": "HTTP Error", "exception message": str(e)}
             
         # Fallback to Spark parser
         return self.sparkSession.sql(sqlText)

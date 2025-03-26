@@ -13,7 +13,7 @@ class OpenDicClient:
         response = requests.post(url, json=data, headers={"Authorization": f"Bearer {self.oauth_token}"})
         print("URL:", url)
         response.raise_for_status() # Raise an exception if the response is not successful
-        return response.json()
+        return response.json() # Parse into Python Dictionary
     
     def get(self, endpoint):
         url = self.api_url + "/opendic/v1" + endpoint
