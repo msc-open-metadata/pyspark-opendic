@@ -40,7 +40,7 @@ def test_create_with_props(mock_get, mock_post, catalog):
 
     dict_props = {"args": {"arg1": "string", "arg2": "number"}, "language": "sql", "definition": "SELECT * FROM my_table"}
     udo_object = Udo(type = "function", name = "my_function", props = dict_props)
-    expected_payload = CreateUdoRequest(udo = udo_object).model_dump_json()
+    expected_payload = CreateUdoRequest(udo = udo_object).model_dump()
 
     response = catalog.sql(query)
 
@@ -60,7 +60,7 @@ def test_create_without_props(mock_get, mock_post, catalog):
     """
 
     udo_object = Udo(type = "function", name = "my_table_func")
-    expected_payload = CreateUdoRequest(udo = udo_object).model_dump_json()
+    expected_payload = CreateUdoRequest(udo = udo_object).model_dump()
     
     response = catalog.sql(query)
 
@@ -80,7 +80,7 @@ def test_create_with_alias(mock_get, mock_post, catalog):
     """
 
     udo_object = Udo(type = "function", name = "my_function", alias = "my_alias")
-    expected_payload = CreateUdoRequest(udo = udo_object).model_dump_json()
+    expected_payload = CreateUdoRequest(udo = udo_object).model_dump()
 
     response = catalog.sql(query)
 
@@ -146,9 +146,9 @@ def test_define(mock_post, catalog):
     DEFINE OPEN function PROPS { "language": "string", "version": "string", "def":"string"}
     """
 
-    expected_payload = DefineUdoRequest(udoType = "function", properties = {"language": "string", "version": "string", "def":"string"}).model_dump_json()
+    expected_payload = DefineUdoRequest(udoType = "function", properties = {"language": "string", "version": "string", "def":"string"}).model_dump()
 
-
+    print("EXPECTED PAYLOAD:", expected_payload)
     response = catalog.sql(query)
 
     mock_post.assert_called_once_with("/objects", expected_payload)

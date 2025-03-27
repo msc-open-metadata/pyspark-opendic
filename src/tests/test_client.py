@@ -28,7 +28,7 @@ def test_post_function(mock_post : requests.post, client):
 
     dict_props = {"args": {"arg1": "string", "arg2": "number"}, "language": "sql", "definition": "SELECT * FROM my_table"}
     udo_object = Udo(type = "function", name = "my_function", props = dict_props)
-    payload = CreateUdoRequest(udo = udo_object).model_dump_json()
+    payload = CreateUdoRequest(udo = udo_object).model_dump()
 
     # Call the actual function (this normally calls requests.post - which is replaced with mock_post here)
     response = client.post("/objects/functions", payload)
@@ -37,7 +37,7 @@ def test_post_function(mock_post : requests.post, client):
     mock_post.assert_called_with(
         f"{MOCK_API_URL}/opendic/v1/objects/functions",
         json = payload,
-        headers = {"Authorization": "Bearer mocked_token"}
+        headers = {'Authorization': 'Bearer mocked_token', 'Content-Type': 'application/json'}
     )
 
     # Check if we got the expected response

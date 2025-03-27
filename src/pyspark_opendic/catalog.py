@@ -52,6 +52,7 @@ class OpenDicCatalog(Catalog):
 
         # Syntax: DEFINE OPEN <udoType> PROPS { <properties> }
         # Example: sql = 'DEFINE OPEN function PROPS { "language": "string", "version": "string", "def":"string"}'
+        # TODO: can we somehow add validation for wheter the props are defined with data types? as above, "language": "string".. can we validate that string is a data type etc.?
         opendic_define_pattern = (
             r"^define"                                      # "DEFINE" at the start
             r"\s+open\s+(?P<udoType>\w+)"                   # Required UDO type (e.g., "function")
@@ -89,14 +90,14 @@ class OpenDicCatalog(Catalog):
                 return {"error": "Error creating object", "exception message": str(e)}
             
             # Serialize to JSON
-            payload = create_request.model_dump_json()
+            payload = create_request.model_dump()
             
             # Send Request
             try:
                 response = self.client.post(f"/objects/{object_type}", payload)
                 # Sync the object of said type after creation
                 sync_response = self.client.get(f"/objects/{object_type}/sync")
-                dump_handler_response = self.dump_handler(sync_response)
+                dump_handler_response = self.dump_handler(sync_response) # TODO: we should probably parse this to the PullStatements model we have for consistency and readability? not that important
             except requests.exceptions.HTTPError as e:
                 return {"error": "HTTP Error", "exception message": str(e)}
 
@@ -141,8 +142,8 @@ class OpenDicCatalog(Catalog):
                 return {"error": "Error defining object", "exception message": str(e)}
 
             # Serialize to JSON
-            payload = define_request.model_dump_json()
-            
+            payload = define_request.model_dump()
+            print("Define Request:", payload)
             # Send Request
             try:
                 response = self.client.post(f"/objects", payload)
