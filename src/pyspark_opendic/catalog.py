@@ -5,7 +5,7 @@ import requests
 import json
 from pyspark_opendic.client import OpenDicClient
 
-from pyspark_opendic.model.openapi_models import CreateUdoRequest, DefineUdoRequest
+from pyspark_opendic.model.openapi_models import AddMappingRequest, CreateUdoRequest, DefineUdoRequest
 from pyspark_opendic.model.openapi_models import Udo, PlatformMapping, SnowflakePlatformMapping, SparkPlatformMapping  # Import updated models
 
 
@@ -73,6 +73,18 @@ class OpenDicCatalog(Catalog):
             r"\s+open\s+(?P<object_type>\w+)"  # Required object type after "open"
         )
 
+        # Syntax: ADD OPEN MAPPING <object_type> PLATFORM <platform_name> SYNTAX { <mapping_syntax> } PROPS { <property_mappings> }
+        # Example: 
+        # ADD OPEN MAPPING function PLATFORM spark SYNTAX { "CREATE FUNCTION {name} ({params}) RETURNS {return_type} AS $$ {def} $$" } 
+        # PROPS { "name": "name", "params": "params", "return_type": "return_type", "def": "def" }
+        opendic_add_mapping_pattern = (
+            r"^add\s+open\s+mapping\s+(?P<object_type>\w+)"     # "ADD OPEN MAPPING" <object_type>
+            r"\s+platform\s+(?P<platform>\w+)"                   # "PLATFORM" <platform_name>
+            r"\s+syntax\s*(?P<syntax>\{.*?\})"                   # "SYNTAX" { <mapping_syntax> }
+            r"\s+props\s*(?P<properties>\{.*?\})"                # "PROPS" { <property_mappings> }
+        )
+
+
 
         # Check pattern matches
         create_match = re.match(opendic_create_pattern, query_cleaned, re.IGNORECASE)
@@ -81,6 +93,7 @@ class OpenDicCatalog(Catalog):
         sync_match = re.match(opendic_sync_pattern, query_cleaned, re.IGNORECASE)
         define_match = re.match(opendic_define_pattern, query_cleaned, re.IGNORECASE)
         drop_match = re.match(opendic_drop_pattern, query_cleaned, re.IGNORECASE)
+        add_mapping_match = re.match(opendic_add_mapping_pattern, query_cleaned, re.IGNORECASE)
 
 
         if create_match:
@@ -131,7 +144,7 @@ class OpenDicCatalog(Catalog):
         
         elif show_types_match:
             try:
-                response = self.client.get("/objects/types")
+                response = self.client.get("/objects")
             except requests.exceptions.HTTPError as e:
                 return {"error": "HTTP Error", "exception message": str(e)}
             
@@ -191,6 +204,50 @@ class OpenDicCatalog(Catalog):
                 return {"error": "HTTP Error", "exception message": str(e)}
             
             return {"success": "Object dropped successfully", "response": response}
+        
+        elif add_mapping_match:
+            object_type = add_mapping_match.group('object_type') 
+            platform = add_mapping_match.group('platform')
+            syntax = add_mapping_match.group('syntax')
+            properties = add_mapping_match.group('properties')
+
+            print("HHHHHHHHHHHHAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+
+            # Parse props as JSON - serves as a basic syntax check
+              # Parse the 'syntax' and 'properties' (which are propertyMappings)
+            try:
+                syntax_props = syntax.strip('{}').strip()  # Remove surrounding curly braces for syntax
+                property_mappings = json.loads(properties)  # Parse the propertyMappings JSON string
+            except json.JSONDecodeError as e:
+                return {"error": "Invalid JSON syntax in propertyMappings", "details": str(e)}
+
+
+            # Build AddMappingRequest model
+            try:
+                print("HHHHHHHHHHHHAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA 3")
+                add_mapping_request = AddMappingRequest(
+                    udoType=object_type,  
+                    platform=platform,
+                    syntax=syntax_props,  
+                    propertyMappings=property_mappings  
+                )
+                print("HHHHHHHHHHHHAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA 4")
+            except Exception as e:
+                return {"error": "Error creating object", "exception message": str(e)}
+
+            # Serialize to JSON
+            print("HHHHHHHHHHHHAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA 5")
+            payload = add_mapping_request.model_dump()
+
+            # Send Request
+            try:
+                print("HHHHHHHHHHHHAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA 6")
+                response = self.client.post("/mappings", payload)
+            except requests.exceptions.HTTPError as e:
+                return {"error": "HTTP Error", "exception message": str(e)}
+
+            return {"success": "Object created successfully", "response": response}
+
             
         # Fallback to Spark parser
         return self.sparkSession.sql(sqlText)

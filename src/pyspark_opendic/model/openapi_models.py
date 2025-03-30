@@ -45,3 +45,9 @@ class PullStatements(BaseModel):
 
 class Statement(BaseModel):
     definition: str  # The SQL statement definition
+
+class AddMappingRequest(BaseModel):
+    udoType: str
+    platform: str
+    syntax: dict[str, Any]
+    propertyMappings: dict[str, Any]

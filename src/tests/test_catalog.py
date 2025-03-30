@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import MagicMock, patch
 from pyspark_opendic.catalog import OpenDicCatalog
 import json
-from pyspark_opendic.model.openapi_models import CreateUdoRequest, DefineUdoRequest, Udo
+from pyspark_opendic.model.openapi_models import AddMappingRequest, CreateUdoRequest, DefineUdoRequest, Udo
 
 MOCK_API_URL = "https://mock-api-url.com"
 
@@ -213,3 +213,24 @@ def test_show_types(mock_get, catalog):
     mock_get.assert_called_once_with("/objects/types")
     assert response == {'success': 'Objects retrieved successfully', 'response': {'success': True, 'objects': [{'type': 'function', 'name': 'my_function', 'language': 'sql', 'args': {'arg1': 'string', 'arg2': 'number'}, 'definition': 'SELECT * FROM my_table'}]}}
 
+
+# ---- Tests for ADD OPEN MAPPING ----
+@patch('pyspark_opendic.client.OpenDicClient.post')
+def test_add_open_mapping(mock_post, catalog):
+    """Test ADD OPEN MAPPING command."""
+    mock_post.return_value = {"success": True}
+
+    query = "ADD OPEN MAPPING function PLATFORM spark SYNTAX { \"CREATE FUNCTION {name} ({params}) RETURNS {return_type} AS $$ {def} $$\" } PROPS { \"name\": \"name\", \"params\": \"params\", \"return_type\": \"return_type\", \"def\": \"def\" }"
+
+    expected_payload = AddMappingRequest(
+        udoType="function",
+        platform="spark",
+        syntax={"template": "CREATE FUNCTION {name} ({params})"},  # Use a dictionary
+        propertyMappings={"name": "my_function", "params": "arg1, arg2"}
+    ).model_dump()
+
+
+    response = catalog.sql(query)
+
+    mock_post.assert_called_once_with("/mappings", expected_payload)
+    assert response == {'success': 'Mapping added successfully', 'response': {'success': True}}
