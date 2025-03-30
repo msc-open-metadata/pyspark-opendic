@@ -7,29 +7,28 @@ class OpenDicClient:
         self.api_url = api_url
         self.credentials = credentials
         self.oauth_token = self.get_polaris_oauth_token(credentials)
-
+    
     def post(self, endpoint, data : dict):
         url = self.api_url+ "/opendic/v1" + endpoint
-        response = requests.post(url, json=data, headers={"Authorization": f"Bearer {self.oauth_token}", "Content-Type": "application/json"})
-        print("URL:", url)
+        response : requests.Response = requests.post(url, json=data, headers={"Authorization": f"Bearer {self.oauth_token}", "Content-Type": "application/json"})
         response.raise_for_status() # Raise an exception if the response is not successful
-        return response.json() # Parse into Python Dictionary
+        return response.json()    
     
     def get(self, endpoint):
         url = self.api_url + "/opendic/v1" + endpoint
-        response = requests.get(url, headers={"Authorization": f"Bearer {self.oauth_token}"})
+        response : requests.Response = requests.get(url, headers={"Authorization": f"Bearer {self.oauth_token}"})
         response.raise_for_status() # Raise an exception if the response is not successful
         return response.json()
     
     def put(self, endpoint, data : dict):
-        url = self.api_url + endpoint
-        response = requests.put(url, json=data, headers={"Authorization": f"Bearer {self.oauth_token}"})
+        url = self.api_url + "/opendic/v1" + endpoint
+        response : requests.Response = requests.put(url, json=data, headers={"Authorization": f"Bearer {self.oauth_token}"})
         response.raise_for_status() # Raise an exception if the response is not successful
         return response.json()
     
     def delete(self, endpoint):
-        url = self.api_url + endpoint
-        response = requests.delete(url, headers={"Authorization": f"Bearer {self.oauth_token}"})
+        url = self.api_url + "/opendic/v1" + endpoint
+        response : requests.Response = requests.delete(url, headers={"Authorization": f"Bearer {self.oauth_token}"})
         response.raise_for_status() # Raise an exception if the response is not successful
         return response.json()
     
@@ -45,5 +44,7 @@ class OpenDicClient:
             "client_secret": f"{client_secret}",
             "scope": "PRINCIPAL_ROLE:ALL"
         }
+        response = requests.post(url, data=data, headers={"Content-Type": "application/x-www-form-urlencoded"})
+        response.raise_for_status()
 
-        return requests.post(url, data=data).json()["access_token"]
+        return response.json()["access_token"]

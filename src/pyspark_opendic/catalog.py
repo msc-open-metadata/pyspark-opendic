@@ -42,6 +42,13 @@ class OpenDicCatalog(Catalog):
             r"s?"                                           # Optionally match a trailing "s"
         )
 
+        # Syntax: SHOW OPEN TYPES
+        # Example: SHOW OPEN TYPES
+        opendic_show_types_pattern = (
+            r"^show"                       # "show" at the start
+            r"\s+open\s+types"              # Required "open types"
+        )
+
         # Syntax: SYNC OPEN <object_type>[s]
         # Example: SYNC OPEN functions
         opendic_sync_pattern = (
@@ -59,12 +66,21 @@ class OpenDicCatalog(Catalog):
             r"(?:\s+props\s*(?P<properties>\{[\s\S]*\}))?"  # REQUIRED PROPS with JSON inside {}
         )
 
+        # Syntax: DROP OPEN <object_type>
+        # Example: DROP OPEN function
+        opendic_drop_pattern = (
+            r"^drop"                      # "DROP" at the start
+            r"\s+open\s+(?P<object_type>\w+)"  # Required object type after "open"
+        )
+
 
         # Check pattern matches
         create_match = re.match(opendic_create_pattern, query_cleaned, re.IGNORECASE)
         show_match = re.match(opendic_show_pattern, query_cleaned, re.IGNORECASE)
+        show_types_match = re.match(opendic_show_types_pattern, query_cleaned, re.IGNORECASE)
         sync_match = re.match(opendic_sync_pattern, query_cleaned, re.IGNORECASE)
         define_match = re.match(opendic_define_pattern, query_cleaned, re.IGNORECASE)
+        drop_match = re.match(opendic_drop_pattern, query_cleaned, re.IGNORECASE)
 
 
         if create_match:
@@ -113,6 +129,14 @@ class OpenDicCatalog(Catalog):
             
             return {"success": "Objects retrieved successfully", "response": response}
         
+        elif show_types_match:
+            try:
+                response = self.client.get("/objects/types")
+            except requests.exceptions.HTTPError as e:
+                return {"error": "HTTP Error", "exception message": str(e)}
+            
+            return {"success": "Object types retrieved successfully", "response": response}
+
         elif sync_match: # TODO: support for both sync all or just sync just one object - but this would be handled at Polaris-side
             object_type = sync_match.group('object_type')
             try :
@@ -141,9 +165,15 @@ class OpenDicCatalog(Catalog):
             except Exception as e:
                 return {"error": "Error defining object", "exception message": str(e)}
 
+            # This is a basic check, but we should probably add a more advanced one later on
+            try:
+                self.validate_data_type(props) 
+            except ValueError as e:
+                return {"error": "Invalid type for DEFINE statement", "exception message": str(e)}
+
             # Serialize to JSON
             payload = define_request.model_dump()
-            print("Define Request:", payload)
+            
             # Send Request
             try:
                 response = self.client.post(f"/objects", payload)
@@ -151,6 +181,16 @@ class OpenDicCatalog(Catalog):
                 return {"error": "HTTP Error", "exception message": str(e)}
             
             return {"success": "Object defined successfully", "response": response}
+        
+        # Not sure if we should support dropping a specific object tuple, and not the whole table?
+        elif drop_match:
+            object_type = drop_match.group('object_type')
+            try:
+                response = self.client.delete(f"/objects/{object_type}")
+            except requests.exceptions.HTTPError as e:
+                return {"error": "HTTP Error", "exception message": str(e)}
+            
+            return {"success": "Object dropped successfully", "response": response}
             
         # Fallback to Spark parser
         return self.sparkSession.sql(sqlText)
@@ -183,3 +223,23 @@ class OpenDicCatalog(Catalog):
                     execution_results.append({"sql": sql_text, "status": "failed", "error": str(e)})
 
         return {"success": True, "executions": execution_results}
+    
+    def validate_data_type(self, props: dict[str, str]):
+        """
+        Validate the data type against a predefined set of valid types.
+
+        Args:
+            proerties (dict): The properties dictionary to validate.
+
+        Returns:
+            dict: A dictionary with the validation result.
+        """
+        # The same set of valid data types as in the OpenDic API - UserDefinedEntitySchema
+        valid_data_types = {"string", "number", "boolean", "float", "date", "array", "list", "map", "object", "variant"}
+
+        for key, value in props.items():
+            if value.lower() not in valid_data_types:
+                raise ValueError(f"Invalid data type '{value}' for key '{key}'")
+    
+        
+        return {"success": "Data types validated successfully"}

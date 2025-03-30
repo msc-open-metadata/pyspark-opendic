@@ -1,6 +1,6 @@
 import pytest
 import requests
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from pyspark_opendic.client import OpenDicClient
 from pyspark_opendic.model.openapi_models import CreateUdoRequest, Udo
 
@@ -23,8 +23,10 @@ def test_post_function(mock_post : requests.post, client):
     """Test if the OpenDicClient correctly sends a POST request."""
 
     # Fake the API response on the mock object (the requests.post function)
-    mock_post.return_value.status_code = 200
-    mock_post.return_value.json.return_value = {"success": True}
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"success": True}
+    mock_post.return_value = mock_response
 
     dict_props = {"args": {"arg1": "string", "arg2": "number"}, "language": "sql", "definition": "SELECT * FROM my_table"}
     udo_object = Udo(type = "function", name = "my_function", props = dict_props)
@@ -49,8 +51,10 @@ def test_get_function(mock_get : requests.get, client):
     """Test if OpenDicClient correctly sends a GET request."""
     
     # Fake the API response on the mock object (the requests.get function)
-    mock_get.return_value.status_code = 200
-    mock_get.return_value.json.return_value = {"success": True}
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"success": True}
+    mock_get.return_value = mock_response
 
     # Call the actual function
     response = client.get("/objects/functions")

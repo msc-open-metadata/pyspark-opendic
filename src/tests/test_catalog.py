@@ -175,3 +175,41 @@ def test_define_pydantic_error(mock_post, catalog):
 
     assert response["error"] == "Error defining object"
     assert "validation error" in response["exception message"]
+
+@patch('pyspark_opendic.client.OpenDicClient.post')
+def test_define_invalid_type(mock_post, catalog):
+    query = """
+    DEFINE OPEN table PROPS { "language": "string", "version": "hashmap", "def":"string"}
+    """
+
+    response = catalog.sql(query)
+
+    assert response["error"] == "Invalid type for DEFINE statement"
+    assert "Invalid data type 'hashmap' for key 'version'" in response["exception message"]
+
+
+# ---- Tests for DROP ----
+@patch('pyspark_opendic.client.OpenDicClient.delete')
+def test_drop_function(mock_delete, catalog):
+    mock_delete.return_value = {"success": True}
+
+    query = "DROP OPEN function"
+
+    response = catalog.sql(query)
+
+    mock_delete.assert_called_once_with("/objects/function")
+    assert response == {'success': 'Object dropped successfully', 'response': {'success': True}}
+
+# ---- Tests for Show types ----
+@patch('pyspark_opendic.client.OpenDicClient.get')
+def test_show_types(mock_get, catalog):
+    mock_get.return_value = {"success": True,
+                                 "objects": [{"type": "function", "name": "my_function", "language": "sql", "args": {"arg1": "string", "arg2": "number"}, "definition": "SELECT * FROM my_table"}]}
+
+    query = "SHOW OPEN types"
+
+    response = catalog.sql(query)
+
+    mock_get.assert_called_once_with("/objects/types")
+    assert response == {'success': 'Objects retrieved successfully', 'response': {'success': True, 'objects': [{'type': 'function', 'name': 'my_function', 'language': 'sql', 'args': {'arg1': 'string', 'arg2': 'number'}, 'definition': 'SELECT * FROM my_table'}]}}
+
