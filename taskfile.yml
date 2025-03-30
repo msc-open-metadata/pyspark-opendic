@@ -7,3 +7,15 @@ tasks:
     cmds:
       - uv add pre-commit --dev
       - uv run pre-commit install --hook-type commit-msg
+
+  build-package:
+    desc: Build the package
+    cmds:
+    - uv build
+
+  publish:pypy:
+    desc: publish package to pypy
+    dotenv: [".env"]
+    deps:
+      - build-package
+    cmd: uv publish pypy --token $PYPY_PAT
