@@ -1,6 +1,8 @@
+from unittest.mock import Mock, patch
+
 import pytest
 import requests
-from unittest.mock import Mock, patch
+
 from pyspark_opendic.client import OpenDicClient
 from pyspark_opendic.model.openapi_models import CreateUdoRequest, Udo
 
@@ -49,7 +51,7 @@ def test_post_function(mock_post : requests.post, client):
 @patch("requests.get")
 def test_get_function(mock_get : requests.get, client):
     """Test if OpenDicClient correctly sends a GET request."""
-    
+
     # Fake the API response on the mock object (the requests.get function)
     mock_response = Mock()
     mock_response.status_code = 200

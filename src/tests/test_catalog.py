@@ -1,7 +1,8 @@
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
+
 from pyspark_opendic.catalog import OpenDicCatalog
-import json
 from pyspark_opendic.model.openapi_models import AddMappingRequest, CreateUdoRequest, DefineUdoRequest, Udo
 
 MOCK_API_URL = "https://mock-api-url.com"
@@ -25,9 +26,9 @@ def catalog(mock_get_token, mock_spark):
 def test_create_with_props(mock_get, mock_post, catalog):
     mock_post.return_value = {"success": True}
     mock_get.return_value = {"success": True, "objects": [{"type": "function", "name": "my_function", "language": "sql", "args": {"arg1": "string", "arg2": "number"}, "definition": "SELECT * FROM my_table"}]}
-    
+
     query = """
-    CREATE OPEN function my_function 
+    CREATE OPEN function my_function
     props {
         "args": {
             "arg1": "string",
@@ -61,7 +62,7 @@ def test_create_without_props(mock_get, mock_post, catalog):
 
     udo_object = Udo(type = "function", name = "my_table_func")
     expected_payload = CreateUdoRequest(udo = udo_object).model_dump()
-    
+
     response = catalog.sql(query)
 
     mock_get.assert_called_once_with("/objects/function/sync")
@@ -93,7 +94,7 @@ def test_create_with_alias(mock_get, mock_post, catalog):
 @patch('pyspark_opendic.client.OpenDicClient.post')
 def test_invalid_json_in_props(mock_post, catalog):
     query = """
-    CREATE OPEN function my_function 
+    CREATE OPEN function my_function
     PROPS {
         "args": {
             "arg1": "string",
@@ -204,14 +205,14 @@ def test_drop_function(mock_delete, catalog):
 @patch('pyspark_opendic.client.OpenDicClient.get')
 def test_show_types(mock_get, catalog):
     mock_get.return_value = {"success": True,
-                                 "objects": [{"type": "function", "name": "my_function", "language": "sql", "args": {"arg1": "string", "arg2": "number"}, "definition": "SELECT * FROM my_table"}]}
+                                 "objects": [{"type": "function", "schema": "{schema}"}]}
 
-    query = "SHOW OPEN types"
+    query = "SHOW OPEN TYPES"
 
     response = catalog.sql(query)
 
-    mock_get.assert_called_once_with("/objects/types")
-    assert response == {'success': 'Objects retrieved successfully', 'response': {'success': True, 'objects': [{'type': 'function', 'name': 'my_function', 'language': 'sql', 'args': {'arg1': 'string', 'arg2': 'number'}, 'definition': 'SELECT * FROM my_table'}]}}
+    mock_get.assert_called_once_with("/objects")
+    assert response == {'success': 'Object types retrieved successfully', 'response': {'success': True, 'objects': [{"type": "function", "schema": "{schema}"}]}}
 
 
 # ---- Tests for ADD OPEN MAPPING ----
