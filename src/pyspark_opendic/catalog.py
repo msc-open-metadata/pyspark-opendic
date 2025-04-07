@@ -7,9 +7,10 @@ from pyspark.sql.catalog import Catalog
 
 from pyspark_opendic.client import OpenDicClient
 from pyspark_opendic.model.openapi_models import (  # Import updated models
-    AddMappingRequest,
+    CreatePlatformMappingRequest,
     CreateUdoRequest,
     DefineUdoRequest,
+    PlatformMapping,
     Udo,
 )
 
@@ -76,20 +77,35 @@ class OpenDicCatalog(Catalog):
         # Syntax: DROP OPEN <object_type>
         # Example: DROP OPEN function
         opendic_drop_pattern = (
-            r"^drop"                      # "DROP" at the start
-            r"\s+open\s+(?P<object_type>\w+)"  # Required object type after "open"
+            r"^drop"                                        # "DROP" at the start
+            r"\s+open\s+(?P<object_type>\w+)"               # Required object type after "open"
         )
 
-        # Syntax: ADD OPEN MAPPING <object_type> PLATFORM <platform_name> SYNTAX { <mapping_syntax> } PROPS { <property_mappings> }
+
         # Example:
-        # ADD OPEN MAPPING function PLATFORM spark SYNTAX { "CREATE FUNCTION {name} ({params}) RETURNS {return_type} AS $$ {def} $$" }
-        # PROPS { "name": "name", "params": "params", "return_type": "return_type", "def": "def" }
+        # ADD OPEN MAPPING function PLATFORM snowflake SYNTAX {
+        #     CREATE OR ALTER <type> <signature>
+        #     RETURNS <return_type>
+        #     LANGUAGE <language>
+        #     RUNTIME = <runtime>
+        #     HANDLER = '<name>'
+        #     AS $$
+        #     <def>
+        #     $$
+        # } PROPS { "args": { "propType": "map", "format": "<key> <value>", "delimiter": ", " }, ... }
+
         opendic_add_mapping_pattern = (
-            r"^add\s+open\s+mapping\s+(?P<object_type>\w+)"     # "ADD OPEN MAPPING" <object_type>
-            r"\s+platform\s+(?P<platform>\w+)"                   # "PLATFORM" <platform_name>
-            r"\s+syntax\s*(?P<syntax>\{.*?\})"                   # "SYNTAX" { <mapping_syntax> }
-            r"\s+props\s*(?P<properties>\{.*?\})"                # "PROPS" { <property_mappings> }
+            r"^add"
+            r"\s+open\s+mapping"
+            r"\s+(?P<object_type>\w+)"
+            r"\s+platform\s+(?P<platform>\w+)"
+            r"\s+syntax\s*\{\s*(?P<syntax>[\s\S]*?)\s*\}"
+            r"\s+props\s*(?P<props>\{[\s\S]*?\})"
+            r"$"
         )
+
+
+
 
 
 
@@ -100,7 +116,8 @@ class OpenDicCatalog(Catalog):
         sync_match = re.match(opendic_sync_pattern, query_cleaned, re.IGNORECASE)
         define_match = re.match(opendic_define_pattern, query_cleaned, re.IGNORECASE)
         drop_match = re.match(opendic_drop_pattern, query_cleaned, re.IGNORECASE)
-        add_mapping_match = re.match(opendic_add_mapping_pattern, query_cleaned, re.IGNORECASE)
+        add_mapping_match = re.match(opendic_add_mapping_pattern, query_cleaned, re.IGNORECASE | re.DOTALL)
+
 
 
         if create_match:
@@ -208,40 +225,51 @@ class OpenDicCatalog(Catalog):
         elif add_mapping_match:
             object_type = add_mapping_match.group('object_type')
             platform = add_mapping_match.group('platform')
-            syntax = add_mapping_match.group('syntax')
-            properties = add_mapping_match.group('properties')
+            syntax = add_mapping_match.group('syntax').strip() # remove outer "" not required in the pydantic model
+            properties = add_mapping_match.group('props')
 
-            # Parse props as JSON - serves as a basic syntax check
-            # Parse the 'syntax' and 'properties' (which are propertyMappings)
+            print("HERE 1")
+
+            # Remove outer quotes if present - this is a workaround for the fact that the regex captures the outer quotes (or everyything inside curly braces)
+            if syntax.startswith('"') and syntax.endswith('"'):
+                syntax = syntax[1:-1]
+            print("HERE 2")
             try:
-                # FIXME: syntax props type mismatch. Should be a dict i suppose. IDK what we are trying to do here.
-                syntax_props:dict = {"placeholder":"placeholder"} #.syntax.strip('{}').strip()  # Remove surrounding curly braces for syntax
-                property_mappings = json.loads(properties)  # Parse the propertyMappings JSON string
+                # Props is expected to be a JSON-encoded map of maps (e.g., "args": {"propType": "map", ...})
+                print("Props rwaw:", properties)
+                object_dump_map = json.loads(properties)
+                print("HERE 3")
             except json.JSONDecodeError as e:
-                return {"error": "Invalid JSON syntax in propertyMappings", "details": str(e)}
+                print("HERE 4")
+                return {"error": "Invalid JSON syntax in PROPS", "details": str(e)}
 
-
-            # Build AddMappingRequest model
             try:
-                add_mapping_request = AddMappingRequest(
-                    udoType=object_type,
-                    platform=platform,
-                    syntax=syntax_props,
-                    propertyMappings=property_mappings
+                # Build the Pydantic model
+                print("HERE 5")
+                mapping_request = CreatePlatformMappingRequest(
+                    platformMapping=PlatformMapping(
+                        typeName=object_type,
+                        platformName=platform,
+                        syntax=syntax.strip(),  # clean up leading/trailing whitespace/newlines
+                        objectDumpMap=object_dump_map
+                    )
                 )
+                print("HERE 6")
             except Exception as e:
-                return {"error": "Error creating object", "exception message": str(e)}
+                print("HERE 7")
+                return {"error": "Error constructing request model (pydantic)", "exception message": str(e)}
 
-            # Serialize to JSON
-            payload = add_mapping_request.model_dump()
-
-            # Send Request
             try:
-                response = self.client.post("/mappings", payload)
+                print("HERE 8")
+                response = self.client.post(
+                    f"/objects/{object_type}/platforms/{platform}",
+                    mapping_request.model_dump()
+                )
             except requests.exceptions.HTTPError as e:
+                print("HERE 9")
                 return {"error": "HTTP Error", "exception message": str(e)}
 
-            return {"success": "Object created successfully", "response": response}
+            return {"success": "Mapping added successfully", "response": response}
 
 
         # Fallback to Spark parser
