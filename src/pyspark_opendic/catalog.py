@@ -81,7 +81,6 @@ class OpenDicCatalog(Catalog):
             r"\s+open\s+(?P<object_type>\w+)"               # Required object type after "open"
         )
 
-
         # Example:
         # ADD OPEN MAPPING function PLATFORM snowflake SYNTAX {
         #     CREATE OR ALTER <type> <signature>
@@ -113,6 +112,15 @@ class OpenDicCatalog(Catalog):
             r"$"                                             # End of string
         )
 
+        # Syntax: SHOW OPEN PLATFORMS FOR <object_type>
+        # Example: SHOW OPEN PLATFORMS FOR function
+        opendic_show_platforms_pattern = (
+            r"^show"                                         # "show" at the start
+            r"\s+open\s+platforms\s+for"                     # "open platforms for"
+            r"\s+(?P<object_type>\w+)"                       # Object type (e.g., function)
+            r"$"                                             # End of string
+        )
+
         # Check pattern matches
         create_match = re.match(opendic_create_pattern, query_cleaned, re.IGNORECASE)
         show_types_match = re.match(opendic_show_types_pattern, query_cleaned, re.IGNORECASE)
@@ -121,6 +129,7 @@ class OpenDicCatalog(Catalog):
         define_match = re.match(opendic_define_pattern, query_cleaned, re.IGNORECASE)
         drop_match = re.match(opendic_drop_pattern, query_cleaned, re.IGNORECASE)
         show_mapping_match = re.match(opendic_show_mapping_pattern, query_cleaned, re.IGNORECASE)
+        show_mapping_platforms_match = re.match(opendic_show_platforms_pattern, query_cleaned, re.IGNORECASE)
         add_mapping_match = re.match(opendic_add_mapping_pattern, query_cleaned, re.IGNORECASE | re.DOTALL)
 
         if create_match:
@@ -184,6 +193,15 @@ class OpenDicCatalog(Catalog):
                 return {"error": "HTTP Error", "exception message": str(e)}
             
             return {"success": "Mapping retrieved successfully", "response": response}
+        
+        elif show_mapping_platforms_match:
+            object_type = show_mapping_platforms_match.group('object_type')
+            try:
+                response = self.client.get(f"/objects/{object_type}/platforms")
+            except requests.exceptions.HTTPError as e:
+                return {"error": "HTTP Error", "exception message": str(e)}
+
+            return {"success": "Platforms retrieved successfully", "response": response}
 
         elif sync_match: # TODO: support for both sync all or sync just one object
             object_type = sync_match.group('object_type')
