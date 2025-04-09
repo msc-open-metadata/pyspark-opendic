@@ -122,6 +122,17 @@ def test_show(mock_get, catalog):
     mock_get.assert_called_once_with("/objects/function")
     assert response == {'success': 'Objects retrieved successfully', 'response': {'success': True, 'objects': [{'type': 'function', 'name': 'my_function', 'language': 'sql', 'args': {'arg1': 'string', 'arg2': 'number'}, 'definition': 'SELECT * FROM my_table'}]}}
 
+@patch('pyspark_opendic.client.OpenDicClient.get')
+def test_show_mapping_platform_type(mock_get, catalog):
+    mock_get.return_value = {"success": True, 'response': {'success': True, 'objects': [{'type': 'function', 'name': 'my_function', 'language': 'sql', 'args': {'arg1': 'string', 'arg2': 'number'}, 'definition': 'SELECT * FROM my_table'}]}}
+
+    query = "SHOW OPEN MAPPING function PLATFORM spark"
+
+    response = catalog.sql(query)
+
+    mock_get.assert_called_once_with("/objects/function/platforms/spark")
+    assert response == {'success': 'Mapping retrieved successfully', 'response': {"success": True, 'response': {'success': True, 'objects': [{'type': 'function', 'name': 'my_function', 'language': 'sql', 'args': {'arg1': 'string', 'arg2': 'number'}, 'definition': 'SELECT * FROM my_table'}]}}}
+    
 
 # ---- Tests for SYNC ----
 @patch('pyspark_opendic.client.OpenDicClient.get')

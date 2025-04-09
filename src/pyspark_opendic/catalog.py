@@ -1,6 +1,6 @@
 import json
 import re
-
+from pydantic import ValidationError
 import requests
 from pyspark.sql import SparkSession
 from pyspark.sql.catalog import Catalog
@@ -93,7 +93,6 @@ class OpenDicCatalog(Catalog):
         #     <def>
         #     $$
         # } PROPS { "args": { "propType": "map", "format": "<key> <value>", "delimiter": ", " }, ... }
-
         opendic_add_mapping_pattern = (
             r"^add"
             r"\s+open\s+mapping"
@@ -104,10 +103,15 @@ class OpenDicCatalog(Catalog):
             r"$"
         )
 
-
-
-
-
+        # Syntax: SHOW OPEN MAPPING <object_type> PLATFORM <platform>
+        # Example: SHOW OPEN MAPPING function PLATFORM snowflake
+        opendic_show_mapping_pattern = (
+            r"^show"                                         # "show" at the start
+            r"\s+open\s+mapping"                             # "open mapping"
+            r"\s+(?P<object_type>\w+)"                       # Object type (e.g., function) - some defined UDO with a mapping TODO: we should have a check on Polaris side if a type and mapping exists.
+            r"\s+platform\s+(?P<platform>\w+)"               # Platform name (e.g., snowflake)
+            r"$"                                             # End of string
+        )
 
         # Check pattern matches
         create_match = re.match(opendic_create_pattern, query_cleaned, re.IGNORECASE)
@@ -116,9 +120,8 @@ class OpenDicCatalog(Catalog):
         sync_match = re.match(opendic_sync_pattern, query_cleaned, re.IGNORECASE)
         define_match = re.match(opendic_define_pattern, query_cleaned, re.IGNORECASE)
         drop_match = re.match(opendic_drop_pattern, query_cleaned, re.IGNORECASE)
+        show_mapping_match = re.match(opendic_show_mapping_pattern, query_cleaned, re.IGNORECASE)
         add_mapping_match = re.match(opendic_add_mapping_pattern, query_cleaned, re.IGNORECASE | re.DOTALL)
-
-
 
         if create_match:
             object_type = create_match.group('object_type')
@@ -129,31 +132,29 @@ class OpenDicCatalog(Catalog):
             # Parse props as JSON - this serves as a basic syntax check on the JSON input and default to None for consistency
             try:
                 create_props: dict[str, str] = json.loads(properties) if properties else {}
-            except json.JSONDecodeError as e:
-                return {
-                    "error": "Invalid JSON syntax in properties",
-                    "details": {"sql": sqlText, "exception_message": str(e)}
-                }
-
-            # Build Udo and CreateUdoRequest models
-            try:
+            
+                # Build Udo and CreateUdoRequest Pydantic models            
                 udo_object = Udo(type=object_type, name=name, props=create_props)
                 create_request = CreateUdoRequest(udo=udo_object)
-            except Exception as e:
-                return {"error": "Error creating object", "exception message": str(e)}
+            
+                # Serialize to JSON
+                payload = create_request.model_dump()
 
-            # Serialize to JSON
-            payload = create_request.model_dump()
-
-            # Send Request
-            try:
+                # Send Request
                 response = self.client.post(f"/objects/{object_type}", payload)
                 # Sync the object of said type after creation
                 # sync_response = self.client.get(f"/objects/{object_type}/sync")
                 # dump_handler_response = self.dump_handler(sync_response) # TODO: we should probably parse this to the PullStatements model we have for consistency and readability? not that important
             except requests.exceptions.HTTPError as e:
                 return {"error": "HTTP Error", "exception message": str(e)}
-
+            except ValidationError as e:
+                return {"error": "Error creating object", "exception message": str(e)}
+            except json.JSONDecodeError as e:
+                return {
+                    "error": "Invalid JSON syntax in properties",
+                    "details": {"sql": sqlText, "exception_message": str(e)}
+                }
+            
             return {"success": "Object created successfully", "response": response}
                     # , "sync_response": dump_handler_response}
 
@@ -173,16 +174,25 @@ class OpenDicCatalog(Catalog):
                 return {"error": "HTTP Error", "exception message": str(e)}
 
             return {"success": "Objects retrieved successfully", "response": response}
+        
+        elif show_mapping_match:
+            object_type = show_mapping_match.group('object_type')
+            platform = show_mapping_match.group('platform')
+            try:
+                response = self.client.get(f"/objects/{object_type}/platforms/{platform}")
+            except requests.exceptions.HTTPError as e:
+                return {"error": "HTTP Error", "exception message": str(e)}
+            
+            return {"success": "Mapping retrieved successfully", "response": response}
 
-
-        elif sync_match: # TODO: support for both sync all or just sync just one object - but this would be handled at Polaris-side
+        elif sync_match: # TODO: support for both sync all or sync just one object
             object_type = sync_match.group('object_type')
             try :
                 response = self.client.get(f"/objects/{object_type}/sync")
             except requests.exceptions.HTTPError as e:
                 return {"error": "HTTP Error", "exception message": str(e)}
 
-            return self.dump_handler(response) #obs. response is already made a Dict from the client}
+            return self.dump_handler(response)
         elif define_match:
             # FIXME: I have refactored this switch case. I propose we make the rest more neat like this.
             udoType: str = define_match.group('udoType')
@@ -209,7 +219,7 @@ class OpenDicCatalog(Catalog):
                 return {"error": "Invalid type for DEFINE statement", "exception message": str(e)}
             except requests.exceptions.HTTPError as e:
                 return {"error": "HTTP Error", "exception message": str(e)}
-            except Exception as e:
+            except ValidationError as e:
                 return {"error": "Error defining object", "exception message": str(e)}
 
         # Not sure if we should support dropping a specific object tuple, and not the whole table?
@@ -228,24 +238,15 @@ class OpenDicCatalog(Catalog):
             syntax = add_mapping_match.group('syntax').strip() # remove outer "" not required in the pydantic model
             properties = add_mapping_match.group('props')
 
-            print("HERE 1")
-
             # Remove outer quotes if present - this is a workaround for the fact that the regex captures the outer quotes (or everyything inside curly braces)
+            
             if syntax.startswith('"') and syntax.endswith('"'):
                 syntax = syntax[1:-1]
-            print("HERE 2")
             try:
                 # Props is expected to be a JSON-encoded map of maps (e.g., "args": {"propType": "map", ...})
-                print("Props rwaw:", properties)
                 object_dump_map = json.loads(properties)
-                print("HERE 3")
-            except json.JSONDecodeError as e:
-                print("HERE 4")
-                return {"error": "Invalid JSON syntax in PROPS", "details": str(e)}
 
-            try:
-                # Build the Pydantic model
-                print("HERE 5")
+                # Build the Pydantic model - validate
                 mapping_request = CreatePlatformMappingRequest(
                     platformMapping=PlatformMapping(
                         typeName=object_type,
@@ -254,23 +255,19 @@ class OpenDicCatalog(Catalog):
                         objectDumpMap=object_dump_map
                     )
                 )
-                print("HERE 6")
-            except Exception as e:
-                print("HERE 7")
-                return {"error": "Error constructing request model (pydantic)", "exception message": str(e)}
-
-            try:
-                print("HERE 8")
+            
                 response = self.client.post(
                     f"/objects/{object_type}/platforms/{platform}",
                     mapping_request.model_dump()
                 )
+            except json.JSONDecodeError as e:
+                return {"error": "Invalid JSON syntax in PROPS", "details": str(e)}
+            except ValidationError as e:
+                return {"error": "Error validating request model (pydantic)", "exception message": str(e)}
             except requests.exceptions.HTTPError as e:
-                print("HERE 9")
                 return {"error": "HTTP Error", "exception message": str(e)}
 
             return {"success": "Mapping added successfully", "response": response}
-
 
         # Fallback to Spark parser
         return self.sparkSession.sql(sqlText)
@@ -315,7 +312,7 @@ class OpenDicCatalog(Catalog):
             dict: A dictionary with the validation result.
         """
         # The same set of valid data types as in the OpenDic API - UserDefinedEntitySchema
-        valid_data_types = {"string", "number", "boolean", "float", "date", "array", "list", "map", "object", "variant"}
+        valid_data_types = {"string", "number", "boolean", "float", "date", "array", "list", "map", "object", "variant", "int", "double"}
 
         for key, value in props.items():
             if value.lower() not in valid_data_types:
