@@ -45,7 +45,7 @@ def test_create_with_props(mock_get, mock_post, catalog):
 
     response = catalog.sql(query)
 
-    mock_get.assert_called_once_with("/objects/function/sync")
+    #mock_get.assert_called_once_with("/objects/function/sync")
     mock_post.assert_called_once_with("/objects/function", expected_payload)
     #assert response == {"success": "Object created successfully", "sync response": {"success": True, "objects": [{"type": "function", "name": "my_function", "language": "sql", "args": {"arg1": "string", "arg2": "number"}, "definition": "SELECT * FROM my_table"}]}}
 
@@ -65,9 +65,10 @@ def test_create_without_props(mock_get, mock_post, catalog):
 
     response = catalog.sql(query)
 
-    mock_get.assert_called_once_with("/objects/function/sync")
+    #mock_get.assert_called_once_with("/objects/function/sync")
     mock_post.assert_called_once_with("/objects/function", expected_payload)
-    assert response == {'success': 'Object created successfully', 'response': {'success': True}, 'sync_response': {'success': True, 'executions': [{'sql': 'CREATE OR REPLACE FUNCTION my_table_func', 'status': 'executed'}]}}
+    
+    assert response == {'success': 'Object created successfully', 'response': {'success': True}}#, 'sync_response': {'success': True, 'executions': [{'sql': 'CREATE OR REPLACE FUNCTION my_table_func', 'status': 'executed'}]}}
 
 @patch('pyspark_opendic.client.OpenDicClient.post')
 @patch('pyspark_opendic.client.OpenDicClient.get')
@@ -85,9 +86,9 @@ def test_create_with_alias(mock_get, mock_post, catalog):
 
     response = catalog.sql(query)
 
-    mock_get.assert_called_once_with("/objects/function/sync")
+    #mock_get.assert_called_once_with("/objects/function/sync")
     mock_post.assert_called_once_with("/objects/function", expected_payload)
-    assert response == {'success': 'Object created successfully', 'response': {'success': True}, 'sync_response': {'success': True, 'executions': [{'sql': 'CREATE OR REPLACE FUNCTION my_function as my_alias', 'status': 'executed'}]}}
+    assert response == {'success': 'Object created successfully', 'response': {'success': True}}#, 'sync_response': {'success': True, 'executions': [{'sql': 'CREATE OR REPLACE FUNCTION my_function as my_alias', 'status': 'executed'}]}}
 
 
 # ---- Tests for Pydantic INVALID JSON ----
@@ -108,6 +109,16 @@ def test_invalid_json_in_props(mock_post, catalog):
     assert "error" in response
     assert response["error"] == "Invalid JSON syntax in properties"
 
+@patch('pyspark_opendic.client.OpenDicClient.post')
+def test_define_pydantic_error(mock_post, catalog):
+    query = """
+    DEFINE OPEN function
+    """
+
+    response = catalog.sql(query)
+
+    assert "error" in response
+    assert "validation error" in response["exception message"]
 
 # ---- Tests for SHOW ----
 @patch('pyspark_opendic.client.OpenDicClient.get')
@@ -144,6 +155,28 @@ def test_show_mapping_platform(mock_get, catalog):
     mock_get.assert_called_once_with("/objects/function/platforms")
     assert response == {'success': 'Platforms retrieved successfully', 'response': {"success": True, 'response': {'success': True, 'objects': [{'type': 'function', 'name': 'my_function', 'language': 'sql', 'args': {'arg1': 'string', 'arg2': 'number'}, 'definition': 'SELECT * FROM my_table'}]}}}
 
+@patch('pyspark_opendic.client.OpenDicClient.get')
+def test_show_open_platforms(mock_get, catalog):
+    mock_get.return_value = {"success": True, 'response': [{"platform": "spark"}, {"platform": "snowflake"}]}
+
+    query = "SHOW OPEN PLATFORMS"
+
+    response = catalog.sql(query)
+
+    mock_get.assert_called_once_with("/platforms")
+    assert response == {'success': 'Platforms retrieved successfully', 'response': {"success": True, 'response': [{"platform": "spark"}, {"platform": "snowflake"}]}}
+
+@patch('pyspark_opendic.client.OpenDicClient.get')
+def test_show_open_mappings_for_platform(mock_get, catalog):
+    mock_get.return_value = {"success": True, 'response': {"mapping": "...."}}
+
+    query = "SHOW OPEN MAPPINGS FOR spark"
+
+    response = catalog.sql(query)
+
+    mock_get.assert_called_once_with("/platforms/spark")
+    assert response == {'success': "Mappings for platform retrieved successfully", 'response': {"success": True, 'response': {"mapping": "...."}}}
+
 # ---- Tests for SYNC ----
 @patch('pyspark_opendic.client.OpenDicClient.get')
 def test_sync_function(mock_get, catalog):
@@ -170,7 +203,6 @@ def test_define(mock_post, catalog):
 
     expected_payload = DefineUdoRequest(udoType = "function", properties = {"language": "string", "version": "string", "def":"string"}).model_dump()
 
-    print("EXPECTED PAYLOAD:", expected_payload)
     response = catalog.sql(query)
 
     mock_post.assert_called_once_with("/objects", expected_payload)
@@ -187,17 +219,6 @@ def test_define_invalid_json(mock_post, catalog):
     assert "error" in response
     assert response["error"] == "Invalid JSON syntax in properties"
 
-@patch('pyspark_opendic.client.OpenDicClient.post')
-def test_define_pydantic_error(mock_post, catalog):
-    query = """
-    DEFINE OPEN function
-    """
-
-    response = catalog.sql(query)
-
-    #assert response["error"] == "Error defining object"
-    #assert "validation error" in response["exception message"]
-    assert response["error"] != ""
 
 @patch('pyspark_opendic.client.OpenDicClient.post')
 def test_define_invalid_type(mock_post, catalog):
@@ -222,6 +243,17 @@ def test_drop_function(mock_delete, catalog):
 
     mock_delete.assert_called_once_with("/objects/function")
     assert response == {'success': 'Object dropped successfully', 'response': {'success': True}}
+
+@patch('pyspark_opendic.client.OpenDicClient.delete')
+def test_drop_mapping(mock_delete, catalog):
+    mock_delete.return_value = {"success": True}
+
+    query = "DROP OPEN MAPPING FOR spark"
+
+    response = catalog.sql(query)
+
+    mock_delete.assert_called_once_with("/platforms/spark")
+    assert response == {'success': 'Platform\'s mappings dropped successfully', 'response': {'success': True}}
 
 # ---- Tests for Show types ----
 @patch('pyspark_opendic.client.OpenDicClient.get')

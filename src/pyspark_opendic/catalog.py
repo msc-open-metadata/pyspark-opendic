@@ -40,6 +40,7 @@ class OpenDicCatalog(Catalog):
             r"(?:\s+if\s+not\s+exists)?"                    # Optional "if not exists"
             r"(?:\s+as\s+(?P<alias>\w+))?"                  # Optional alias after "as"
             r"(?:\s+props\s*(?P<properties>\{[\s\S]*\}))?"  # Optional "props" keyword, but curly braces are mandatory if present - This is a JSON object
+            
         )
 
         # Syntax: SHOW OPEN TYPES
@@ -72,6 +73,7 @@ class OpenDicCatalog(Catalog):
             r"^define"                                      # "DEFINE" at the start
             r"\s+open\s+(?P<udoType>\w+)"                   # Required UDO type (e.g., "function")
             r"(?:\s+props\s*(?P<properties>\{[\s\S]*\}))?"  # REQUIRED PROPS with JSON inside {}
+            r"$"
         )
 
         # Syntax: DROP OPEN <object_type>
@@ -104,7 +106,7 @@ class OpenDicCatalog(Catalog):
 
         # Syntax: SHOW OPEN MAPPING <object_type> PLATFORM <platform>
         # Example: SHOW OPEN MAPPING function PLATFORM snowflake
-        opendic_show_mapping_pattern = (
+        opendic_show_mapping_for_object_and_platform_pattern = (
             r"^show"                                         # "show" at the start
             r"\s+open\s+mapping"                             # "open mapping"
             r"\s+(?P<object_type>\w+)"                       # Object type (e.g., function) - some defined UDO with a mapping TODO: we should have a check on Polaris side if a type and mapping exists.
@@ -114,23 +116,56 @@ class OpenDicCatalog(Catalog):
 
         # Syntax: SHOW OPEN PLATFORMS FOR <object_type>
         # Example: SHOW OPEN PLATFORMS FOR function
-        opendic_show_platforms_pattern = (
+        opendic_show_platforms_for_object_pattern = (
             r"^show"                                         # "show" at the start
             r"\s+open\s+platforms\s+for"                     # "open platforms for"
             r"\s+(?P<object_type>\w+)"                       # Object type (e.g., function)
             r"$"                                             # End of string
         )
 
+        # Syntax: SHOW OPEN PLATFORMS
+        # Example: SHOW OPEN PLATFORMS
+        opendic_show_platforms_all_pattern = (
+            r"^show"                                        # "show" at the start
+            r"\s+open\s+platforms$"                         # Required "open platforms"
+            r"$"                                            # End of string
+        )
+
+        # Syntax: SHOW OPEN MAPPING[S] FOR <platform>
+        # Example: SHOW OPEN MAPPING FOR snowflake or SHOW OPEN MAPPINGS FOR snowflake
+        opendic_show_mappings_for_platform_pattern = (
+            r"^show"                                          # "show" at the start
+            r"\s+open\s+mappings?\s+for\s+(?P<platform>\w+)"  # "open mappings" (with optional 's') followed by 'for' and platform name
+            r"$"                                              # End of string
+        )
+
+
+        # Syntax: DROP OPEN MAPPING[S] FOR <platform>
+        # Example: DROP OPEN MAPPING FOR snowflake or DROP OPEN MAPPINGS FOR snowflake
+        opendic_drop_mapping_for_platform_pattern = (
+            r"^drop"                                          # "drop" at the start
+            r"\s+open\s+mappings?\s+"                         # "open mapping" with optional "s" for plural
+            r"for\s+(?P<platform>\w+)"                        # "for" followed by platform name
+            r"$"                                              # End of string
+        )
+
+
+
+
         # Check pattern matches
         create_match = re.match(opendic_create_pattern, query_cleaned, re.IGNORECASE)
         show_types_match = re.match(opendic_show_types_pattern, query_cleaned, re.IGNORECASE)
+        show_all_platforms_match = re.match(opendic_show_platforms_all_pattern, query_cleaned, re.IGNORECASE)
+        show_mappings_for_platform_match = re.match(opendic_show_mappings_for_platform_pattern, query_cleaned, re.IGNORECASE)
         show_match = re.match(opendic_show_pattern, query_cleaned, re.IGNORECASE)
         sync_match = re.match(opendic_sync_pattern, query_cleaned, re.IGNORECASE)
         define_match = re.match(opendic_define_pattern, query_cleaned, re.IGNORECASE)
+        drop_platform_match = re.match(opendic_drop_mapping_for_platform_pattern, query_cleaned, re.IGNORECASE)
         drop_match = re.match(opendic_drop_pattern, query_cleaned, re.IGNORECASE)
-        show_mapping_match = re.match(opendic_show_mapping_pattern, query_cleaned, re.IGNORECASE)
-        show_mapping_platforms_match = re.match(opendic_show_platforms_pattern, query_cleaned, re.IGNORECASE)
+        show_mapping_for_object_and_platform_match = re.match(opendic_show_mapping_for_object_and_platform_pattern, query_cleaned, re.IGNORECASE)
+        show_platforms_for_object_match = re.match(opendic_show_platforms_for_object_pattern, query_cleaned, re.IGNORECASE)
         add_mapping_match = re.match(opendic_add_mapping_pattern, query_cleaned, re.IGNORECASE | re.DOTALL)
+        
 
         if create_match:
             object_type = create_match.group('object_type')
@@ -138,9 +173,9 @@ class OpenDicCatalog(Catalog):
             alias = create_match.group('alias')
             properties = create_match.group('properties')
 
-            # Parse props as JSON - this serves as a basic syntax check on the JSON input and default to None for consistency
+            # Parse props as JSON - this serves as a basic syntax check on the JSON input and default to None so we can catch Pydantic Error
             try:
-                create_props: dict[str, str] = json.loads(properties) if properties else {}
+                create_props: dict[str, str] = json.loads(properties) if properties else None
             
                 # Build Udo and CreateUdoRequest Pydantic models            
                 udo_object = Udo(type=object_type, name=name, props=create_props)
@@ -174,6 +209,33 @@ class OpenDicCatalog(Catalog):
                 return {"error": "HTTP Error", "exception message": str(e)}
 
             return {"success": "Object types retrieved successfully", "response": response}
+        
+        elif show_all_platforms_match:
+            try:
+                response = self.client.get("/platforms")
+            except requests.exceptions.HTTPError as e:
+                return {"error": "HTTP Error", "exception message": str(e)}
+
+            return {"success": "Platforms retrieved successfully", "response": response}
+        
+        elif show_mappings_for_platform_match:
+            platform = show_mappings_for_platform_match.group('platform')
+            try:
+                response = self.client.get(f"/platforms/{platform}")
+            except requests.exceptions.HTTPError as e:
+                return {"error": "HTTP Error", "exception message": str(e)}
+
+            return {"success": "Mappings for platform retrieved successfully", "response": response}
+        
+        elif drop_platform_match:
+            platform = drop_platform_match.group('platform')
+        
+            try:
+                response = self.client.delete(f"/platforms/{platform}")
+            except requests.exceptions.HTTPError as e:
+                return {"error": "HTTP Error", "exception message": str(e)}
+
+            return {"success": "Platform's mappings dropped successfully", "response": response}
 
         elif show_match:
             object_type = show_match.group('object_type')
@@ -184,9 +246,9 @@ class OpenDicCatalog(Catalog):
 
             return {"success": "Objects retrieved successfully", "response": response}
         
-        elif show_mapping_match:
-            object_type = show_mapping_match.group('object_type')
-            platform = show_mapping_match.group('platform')
+        elif show_mapping_for_object_and_platform_match:
+            object_type = show_mapping_for_object_and_platform_match.group('object_type')
+            platform = show_mapping_for_object_and_platform_match.group('platform')
             try:
                 response = self.client.get(f"/objects/{object_type}/platforms/{platform}")
             except requests.exceptions.HTTPError as e:
@@ -194,8 +256,8 @@ class OpenDicCatalog(Catalog):
             
             return {"success": "Mapping retrieved successfully", "response": response}
         
-        elif show_mapping_platforms_match:
-            object_type = show_mapping_platforms_match.group('object_type')
+        elif show_platforms_for_object_match:
+            object_type = show_platforms_for_object_match.group('object_type')
             try:
                 response = self.client.get(f"/objects/{object_type}/platforms")
             except requests.exceptions.HTTPError as e:
@@ -215,10 +277,9 @@ class OpenDicCatalog(Catalog):
             # FIXME: I have refactored this switch case. I propose we make the rest more neat like this.
             udoType: str = define_match.group('udoType')
             properties: str = define_match.group('properties')
-
             try:
-                # Parse props as JSON - this serves as a basic syntax check on the JSON input. Default to {}
-                define_props: dict[str, str] = json.loads(properties) if properties else {}
+                # Parse props as JSON - this serves as a basic syntax check on the JSON input.
+                define_props: dict[str, str] = json.loads(properties) if properties else None
                 # Build Udo and CreateUdoRequest models
                 define_request = DefineUdoRequest(udoType=udoType, properties=define_props)
                 # This is a basic check, but we should probably add a more advanced one later on
@@ -243,6 +304,7 @@ class OpenDicCatalog(Catalog):
         # Not sure if we should support dropping a specific object tuple, and not the whole table?
         elif drop_match:
             object_type = drop_match.group('object_type')
+            
             try:
                 response = self.client.delete(f"/objects/{object_type}")
             except requests.exceptions.HTTPError as e:
