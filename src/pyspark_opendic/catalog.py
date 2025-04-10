@@ -1,12 +1,13 @@
 import json
 import re
+from typing import Any
 from pydantic import ValidationError
 import requests
 from pyspark.sql import SparkSession
 from pyspark.sql.catalog import Catalog
 
 from pyspark_opendic.client import OpenDicClient
-from pyspark_opendic.model.openapi_models import (  # Import updated models
+from pyspark_opendic.model.openapi_models import (
     CreatePlatformMappingRequest,
     CreateUdoRequest,
     DefineUdoRequest,
@@ -31,7 +32,7 @@ class OpenDicCatalog(Catalog):
         # TODO: add support for 'or replace' and 'temporary' keywords etc. on catalog-side - not a priority for now, so just ignore
         # TODO: patterns are constants as of now. Should not be defined inside the function itself. They should be moved outside or somewhere else.
         # Syntax: CREATE [OR REPLACE] [TEMPORARY] OPEN <object_type> <name> [IF NOT EXISTS] [AS <alias>] [PROPS { <properties> }]
-        opendic_create_pattern = (
+        opendic_create_pattern : re.Pattern = (
             r"^create"                                      # "create" at the start
             r"(?:\s+or\s+replace)?"                         # Optional "or replace"
             r"(?:\s+temporary)?"                            # Optional "temporary"
@@ -45,14 +46,14 @@ class OpenDicCatalog(Catalog):
 
         # Syntax: SHOW OPEN TYPES
         # Example: SHOW OPEN TYPES
-        opendic_show_types_pattern = (
+        opendic_show_types_pattern : re.Pattern = (
             r"^show"                                         # "show" at the start
             r"\s+open\s+types$"                              # Required "open types"
         )
 
         # Syntax: SHOW OPEN <object_type>[s]
         # Example: SHOW OPEN functions
-        opendic_show_pattern = (
+        opendic_show_pattern : re.Pattern = (
             r"^show"                                        # "show" at the start
             r"\s+open\s+(?P<object_type>(?!types$)\w+)"     # Required object type after "open" and not "TYPES"
             r"s?$"                                           # Optionally match a trailing "s"
@@ -60,7 +61,7 @@ class OpenDicCatalog(Catalog):
 
         # Syntax: SYNC OPEN <object_type>[s]
         # Example: SYNC OPEN functions
-        opendic_sync_pattern = (
+        opendic_sync_pattern : re.Pattern = (
             r"^sync"                                        # "sync" at the start
             r"\s+open\s+(?P<object_type>\w+)"               # Required object type after "open"
             r"s?"                                           # Optionally match a trailing "s"
@@ -69,7 +70,7 @@ class OpenDicCatalog(Catalog):
         # Syntax: DEFINE OPEN <udoType> PROPS { <properties> }
         # Example: sql = 'DEFINE OPEN function PROPS { "language": "string", "version": "string", "def":"string"}'
         # TODO: can we somehow add validation for wheter the props are defined with data types? as above, "language": "string".. can we validate that string is a data type etc.?
-        opendic_define_pattern = (
+        opendic_define_pattern : re.Pattern = (
             r"^define"                                      # "DEFINE" at the start
             r"\s+open\s+(?P<udoType>\w+)"                   # Required UDO type (e.g., "function")
             r"(?:\s+props\s*(?P<properties>\{[\s\S]*\}))?"  # REQUIRED PROPS with JSON inside {}
@@ -78,7 +79,7 @@ class OpenDicCatalog(Catalog):
 
         # Syntax: DROP OPEN <object_type>
         # Example: DROP OPEN function
-        opendic_drop_pattern = (
+        opendic_drop_pattern : re.Pattern = (
             r"^drop"                                        # "DROP" at the start
             r"\s+open\s+(?P<object_type>\w+)"               # Required object type after "open"
         )
@@ -94,7 +95,7 @@ class OpenDicCatalog(Catalog):
         #     <def>
         #     $$
         # } PROPS { "args": { "propType": "map", "format": "<key> <value>", "delimiter": ", " }, ... }
-        opendic_add_mapping_pattern = (
+        opendic_add_mapping_pattern : re.Pattern = (
             r"^add"
             r"\s+open\s+mapping"
             r"\s+(?P<object_type>\w+)"
@@ -106,7 +107,7 @@ class OpenDicCatalog(Catalog):
 
         # Syntax: SHOW OPEN MAPPING <object_type> PLATFORM <platform>
         # Example: SHOW OPEN MAPPING function PLATFORM snowflake
-        opendic_show_mapping_for_object_and_platform_pattern = (
+        opendic_show_mapping_for_object_and_platform_pattern : re.Pattern = (
             r"^show"                                         # "show" at the start
             r"\s+open\s+mapping"                             # "open mapping"
             r"\s+(?P<object_type>\w+)"                       # Object type (e.g., function) - some defined UDO with a mapping TODO: we should have a check on Polaris side if a type and mapping exists.
@@ -116,7 +117,7 @@ class OpenDicCatalog(Catalog):
 
         # Syntax: SHOW OPEN PLATFORMS FOR <object_type>
         # Example: SHOW OPEN PLATFORMS FOR function
-        opendic_show_platforms_for_object_pattern = (
+        opendic_show_platforms_for_object_pattern : re.Pattern = (
             r"^show"                                         # "show" at the start
             r"\s+open\s+platforms\s+for"                     # "open platforms for"
             r"\s+(?P<object_type>\w+)"                       # Object type (e.g., function)
@@ -125,7 +126,7 @@ class OpenDicCatalog(Catalog):
 
         # Syntax: SHOW OPEN PLATFORMS
         # Example: SHOW OPEN PLATFORMS
-        opendic_show_platforms_all_pattern = (
+        opendic_show_platforms_all_pattern : re.Pattern = (
             r"^show"                                        # "show" at the start
             r"\s+open\s+platforms$"                         # Required "open platforms"
             r"$"                                            # End of string
@@ -133,7 +134,7 @@ class OpenDicCatalog(Catalog):
 
         # Syntax: SHOW OPEN MAPPING[S] FOR <platform>
         # Example: SHOW OPEN MAPPING FOR snowflake or SHOW OPEN MAPPINGS FOR snowflake
-        opendic_show_mappings_for_platform_pattern = (
+        opendic_show_mappings_for_platform_pattern : re.Pattern = (
             r"^show"                                          # "show" at the start
             r"\s+open\s+mappings?\s+for\s+(?P<platform>\w+)"  # "open mappings" (with optional 's') followed by 'for' and platform name
             r"$"                                              # End of string
@@ -142,7 +143,7 @@ class OpenDicCatalog(Catalog):
 
         # Syntax: DROP OPEN MAPPING[S] FOR <platform>
         # Example: DROP OPEN MAPPING FOR snowflake or DROP OPEN MAPPINGS FOR snowflake
-        opendic_drop_mapping_for_platform_pattern = (
+        opendic_drop_mapping_for_platform_pattern : re.Pattern = (
             r"^drop"                                          # "drop" at the start
             r"\s+open\s+mappings?\s+"                         # "open mapping" with optional "s" for plural
             r"for\s+(?P<platform>\w+)"                        # "for" followed by platform name
@@ -273,10 +274,10 @@ class OpenDicCatalog(Catalog):
                 return {"error": "HTTP Error", "exception message": str(e)}
 
             return self.dump_handler(response)
+        
         elif define_match:
-            # FIXME: I have refactored this switch case. I propose we make the rest more neat like this.
-            udoType: str = define_match.group('udoType')
-            properties: str = define_match.group('properties')
+            udoType = define_match.group('udoType')
+            properties = define_match.group('properties')
             try:
                 # Parse props as JSON - this serves as a basic syntax check on the JSON input.
                 define_props: dict[str, str] = json.loads(properties) if properties else None
@@ -323,8 +324,8 @@ class OpenDicCatalog(Catalog):
             if syntax.startswith('"') and syntax.endswith('"'):
                 syntax = syntax[1:-1]
             try:
-                # Props is expected to be a JSON-encoded map of maps (e.g., "args": {"propType": "map", ...})
-                object_dump_map = json.loads(properties)
+                # Props is expected to be a JSON-encoded dict of dicts (e.g., "args": {"propType": "map", ...})
+                object_dump_map : dict[str, dict[str, Any]] = json.loads(properties)
 
                 # Build the Pydantic model - validate
                 mapping_request = CreatePlatformMappingRequest(
@@ -353,7 +354,7 @@ class OpenDicCatalog(Catalog):
         return self.sparkSession.sql(sqlText)
 
     # Helper method to extract SQL statements from Polaris response and execute
-    def dump_handler(self, json_dump: dict):
+    def dump_handler(self, json_dump : dict[str, Any]):
         """
         Extracts SQL statements from the Polaris response and executes them using Spark.
 
@@ -363,7 +364,7 @@ class OpenDicCatalog(Catalog):
         Returns:
             list: A list of results from executing the SQL statements.
         """
-        statements = json_dump.get("statements", [])  # Extract the list of SQL statements
+        statements : list[dict[str, str]] = json_dump.get("statements", [])  # Extract the list of SQL statements
 
         if not statements:
             return {"error": "No statements found in response"}
@@ -381,7 +382,7 @@ class OpenDicCatalog(Catalog):
 
         return {"success": True, "executions": execution_results}
 
-    def validate_data_type(self, props: dict[str, str]):
+    def validate_data_type(self, props: dict[str, str]) -> dict[str, str]:
         """
         Validate the data type against a predefined set of valid types.
 
@@ -391,12 +392,11 @@ class OpenDicCatalog(Catalog):
         Returns:
             dict: A dictionary with the validation result.
         """
-        # The same set of valid data types as in the OpenDic API - UserDefinedEntitySchema
+        # The same set of valid data types as in the OpenDic API - UserDefinedEntitySchema (+ int and double)
         valid_data_types = {"string", "number", "boolean", "float", "date", "array", "list", "map", "object", "variant", "int", "double"}
 
         for key, value in props.items():
             if value.lower() not in valid_data_types:
                 raise ValueError(f"Invalid data type '{value}' for key '{key}'")
-
-
+            
         return {"success": "Data types validated successfully"}
