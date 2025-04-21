@@ -1,4 +1,5 @@
 import json
+import pprint
 import re
 from typing import Any
 from pydantic import ValidationError
@@ -12,6 +13,7 @@ from pyspark_opendic.model.openapi_models import (
     CreateUdoRequest,
     DefineUdoRequest,
     PlatformMapping,
+    Statement,
     Udo,
 )
 
@@ -63,8 +65,9 @@ class OpenDicCatalog(Catalog):
         # Example: SYNC OPEN functions
         opendic_sync_pattern : re.Pattern = (
             r"^sync"                                        # "sync" at the start
-            r"\s+open\s+(?P<object_type>\w+)"               # Required object type after "open"
-            r"s?"                                           # Optionally match a trailing "s"
+            r"\s+open\s+(?P<object_type>\w+)\s+for"         # "open platforms for"
+            r"\s+(?P<platform>\w+)"                      # Object type (e.g., function)
+            r"$"                                            # End of string
         )
 
         # Syntax: DEFINE OPEN <udoType> PROPS { <properties> }
@@ -191,42 +194,42 @@ class OpenDicCatalog(Catalog):
                 # sync_response = self.client.get(f"/objects/{object_type}/sync")
                 # dump_handler_response = self.dump_handler(sync_response) # TODO: we should probably parse this to the PullStatements model we have for consistency and readability? not that important
             except requests.exceptions.HTTPError as e:
-                return {"error": "HTTP Error", "exception message": str(e)}
+                return self.pretty_print_result({"error": "HTTP Error", "exception message": str(e), "Catalog Response": response})
             except ValidationError as e:
-                return {"error": "Error creating object", "exception message": str(e)}
+                return self.pretty_print_result({"error": "Error creating object", "exception message": str(e)})
             except json.JSONDecodeError as e:
-                return {
+                return self.pretty_print_result({
                     "error": "Invalid JSON syntax in properties",
                     "details": {"sql": sqlText, "exception_message": str(e)}
-                }
+                })
             
-            return {"success": "Object created successfully", "response": response}
+            return self.pretty_print_result({"success": "Object created successfully", "response": response})
                     # , "sync_response": dump_handler_response}
 
         elif show_types_match:
             try:
                 response = self.client.get("/objects")
             except requests.exceptions.HTTPError as e:
-                return {"error": "HTTP Error", "exception message": str(e)}
+                return self.pretty_print_result({"error": "HTTP Error", "exception message": str(e), "Catalog Response": response})
 
-            return {"success": "Object types retrieved successfully", "response": response}
+            return self.pretty_print_result({"success": "Object types retrieved successfully", "response": response})
         
         elif show_all_platforms_match:
             try:
                 response = self.client.get("/platforms")
             except requests.exceptions.HTTPError as e:
-                return {"error": "HTTP Error", "exception message": str(e)}
+                return self.pretty_print_result({"error": "HTTP Error", "exception message": str(e), "Catalog Response": response})
 
-            return {"success": "Platforms retrieved successfully", "response": response}
+            return self.pretty_print_result({"success": "Platforms retrieved successfully", "response": response})
         
         elif show_mappings_for_platform_match:
             platform = show_mappings_for_platform_match.group('platform')
             try:
                 response = self.client.get(f"/platforms/{platform}")
             except requests.exceptions.HTTPError as e:
-                return {"error": "HTTP Error", "exception message": str(e)}
+                return self.pretty_print_result({"error": "HTTP Error", "exception message": str(e), "Catalog Response": response})
 
-            return {"success": "Mappings for platform retrieved successfully", "response": response}
+            return self.pretty_print_result({"success": "Mappings for platform retrieved successfully", "response": response})
         
         elif drop_platform_match:
             platform = drop_platform_match.group('platform')
@@ -234,18 +237,18 @@ class OpenDicCatalog(Catalog):
             try:
                 response = self.client.delete(f"/platforms/{platform}")
             except requests.exceptions.HTTPError as e:
-                return {"error": "HTTP Error", "exception message": str(e)}
+                return self.pretty_print_result({"error": "HTTP Error", "exception message": str(e), "Catalog Response": response})
 
-            return {"success": "Platform's mappings dropped successfully", "response": response}
+            return self.pretty_print_result({"success": "Platform's mappings dropped successfully", "response": response})
 
         elif show_match:
             object_type = show_match.group('object_type')
             try :
                 response = self.client.get(f"/objects/{object_type}")
             except requests.exceptions.HTTPError as e:
-                return {"error": "HTTP Error", "exception message": str(e)}
+                return self.pretty_print_result({"error": "HTTP Error", "exception message": str(e), "Catalog Response": response})
 
-            return {"success": "Objects retrieved successfully", "response": response}
+            return self.pretty_print_result({"success": "Objects retrieved successfully", "response": response})
         
         elif show_mapping_for_object_and_platform_match:
             object_type = show_mapping_for_object_and_platform_match.group('object_type')
@@ -253,27 +256,33 @@ class OpenDicCatalog(Catalog):
             try:
                 response = self.client.get(f"/objects/{object_type}/platforms/{platform}")
             except requests.exceptions.HTTPError as e:
-                return {"error": "HTTP Error", "exception message": str(e)}
+                return self.pretty_print_result({"error": "HTTP Error", "exception message": str(e), "Catalog Response": response})
             
-            return {"success": "Mapping retrieved successfully", "response": response}
+            return self.pretty_print_result({"success": "Mapping retrieved successfully", "response": response})
         
         elif show_platforms_for_object_match:
             object_type = show_platforms_for_object_match.group('object_type')
             try:
                 response = self.client.get(f"/objects/{object_type}/platforms")
             except requests.exceptions.HTTPError as e:
-                return {"error": "HTTP Error", "exception message": str(e)}
+                return self.pretty_print_result({"error": "HTTP Error", "exception message": str(e), "Catalog Response": response})
 
-            return {"success": "Platforms retrieved successfully", "response": response}
+            return self.pretty_print_result({"success": "Platforms retrieved successfully", "response": response})
 
-        elif sync_match: # TODO: support for both sync all or sync just one object
+        elif sync_match:
             object_type = sync_match.group('object_type')
-            try :
-                response = self.client.get(f"/objects/{object_type}/sync")
-            except requests.exceptions.HTTPError as e:
-                return {"error": "HTTP Error", "exception message": str(e)}
+            platform : str = sync_match.group('platform').lower()
+            # TODO: should we force the platform to be lowercase? or should we keep it as is?
 
-            return self.dump_handler(response)
+            try :
+                response = self.client.get(f"/objects/{object_type}/platforms/{platform}/pull")
+                statements = [Statement.model_validate(item) for item in response]
+            except requests.exceptions.HTTPError as e:
+                return self.pretty_print_result({"error": "HTTP Error", "exception message": str(e), "Catalog Response": response})
+            except ValidationError as e:
+                return self.pretty_print_result({"error": "Error validating request model (pydantic)", "exception message": str(e)})
+
+            return self.dump_handler(statements)
         
         elif define_match:
             udoType = define_match.group('udoType')
@@ -289,18 +298,18 @@ class OpenDicCatalog(Catalog):
                 payload = define_request.model_dump()
                 # Send Request
                 response = self.client.post("/objects", payload)
-                return {"success": "Object defined successfully", "response": response}
+                return self.pretty_print_result({"success": "Object defined successfully", "response": response})
             except json.JSONDecodeError as e:
-                return {
+                return self.pretty_print_result({
                     "error": "Invalid JSON syntax in properties",
                     "details": {"sql": sqlText, "exception_message": str(e)}
-                }
+                })
             except ValueError as e:
-                return {"error": "Invalid type for DEFINE statement", "exception message": str(e)}
+                return self.pretty_print_result({"error": "Invalid type for DEFINE statement", "exception message": str(e)})
             except requests.exceptions.HTTPError as e:
-                return {"error": "HTTP Error", "exception message": str(e)}
+                return self.pretty_print_result({"error": "HTTP Error", "exception message": str(e), "Catalog Response": response})
             except ValidationError as e:
-                return {"error": "Error defining object", "exception message": str(e)}
+                return self.pretty_print_result({"error": "Error defining object", "exception message": str(e)})
 
         # Not sure if we should support dropping a specific object tuple, and not the whole table?
         elif drop_match:
@@ -309,9 +318,9 @@ class OpenDicCatalog(Catalog):
             try:
                 response = self.client.delete(f"/objects/{object_type}")
             except requests.exceptions.HTTPError as e:
-                return {"error": "HTTP Error", "exception message": str(e)}
+                return self.pretty_print_result({"error": "HTTP Error", "exception message": str(e), "Catalog Response": response})
 
-            return {"success": "Object dropped successfully", "response": response}
+            return self.pretty_print_result({"success": "Object dropped successfully", "response": response})
 
         elif add_mapping_match:
             object_type = add_mapping_match.group('object_type')
@@ -342,45 +351,42 @@ class OpenDicCatalog(Catalog):
                     mapping_request.model_dump()
                 )
             except json.JSONDecodeError as e:
-                return {"error": "Invalid JSON syntax in PROPS", "details": str(e)}
+                return self.pretty_print_result({"error": "Invalid JSON syntax in PROPS", "details": str(e)})
             except ValidationError as e:
-                return {"error": "Error validating request model (pydantic)", "exception message": str(e)}
+                return self.pretty_print_result({"error": "Error validating request model (pydantic)", "exception message": str(e)})
             except requests.exceptions.HTTPError as e:
-                return {"error": "HTTP Error", "exception message": str(e)}
+                return self.pretty_print_result({"Exception message": str(e), "Catalog Response": response})
 
-            return {"success": "Mapping added successfully", "response": response}
+            return self.pretty_print_result({"success": "Mapping added successfully", "response": response})
 
         # Fallback to Spark parser
         return self.sparkSession.sql(sqlText)
 
     # Helper method to extract SQL statements from Polaris response and execute
-    def dump_handler(self, json_dump : dict[str, Any]):
+    def dump_handler(self, response: list[Statement]):
         """
         Extracts SQL statements from the Polaris response and executes them using Spark.
 
         Args:
-            json_dump (dict): JSON response from Polaris containing SQL statements.
+            response (list): List of Statement objects.
 
         Returns:
-            list: A list of results from executing the SQL statements.
+            dict: Execution result with status.
         """
-        statements : list[dict[str, str]] = json_dump.get("statements", [])  # Extract the list of SQL statements
-
-        if not statements:
-            return {"error": "No statements found in response"}
-
+        if not response:
+            return self.pretty_print_result({"error": "No statements found in response"})
+        
         execution_results = []
-
-        for statement in statements:
-            sql_text = statement.get("definition")  # Extract the SQL string
+        for statement in response:
+            sql_text = statement.definition.strip()  # Extract SQL statement from the response
             if sql_text:
                 try:
                     result = self.sparkSession.sql(sql_text)  # Execute in Spark
-                    execution_results.append({"sql": sql_text, "status": "executed"}) # "result": result
+                    execution_results.append({"sql": sql_text, "status": "executed"})
                 except Exception as e:
                     execution_results.append({"sql": sql_text, "status": "failed", "error": str(e)})
 
-        return {"success": True, "executions": execution_results}
+        return self.pretty_print_result({"success": True, "executions": execution_results})
 
     def validate_data_type(self, props: dict[str, str]) -> dict[str, str]:
         """
@@ -400,3 +406,9 @@ class OpenDicCatalog(Catalog):
                 raise ValueError(f"Invalid data type '{value}' for key '{key}'")
             
         return {"success": "Data types validated successfully"}
+
+    def pretty_print_result(self, result : dict) -> str:
+        """
+        Pretty prints the result dictionary as a JSON formatted string.
+        """
+        return json.dumps(result, indent=4, default=str)

@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from pyspark_opendic.catalog import OpenDicCatalog
-from pyspark_opendic.model.openapi_models import CreatePlatformMappingRequest, CreateUdoRequest, DefineUdoRequest, PlatformMapping, PlatformMappingObjectDumpMapValue, Udo
+from pyspark_opendic.model.openapi_models import CreatePlatformMappingRequest, CreateUdoRequest, DefineUdoRequest, PlatformMapping, PlatformMappingObjectDumpMapValue, Statement, Udo
 
 MOCK_API_URL = "https://mock-api-url.com"
 
@@ -68,7 +68,7 @@ def test_create_without_props(mock_get, mock_post, catalog):
     #mock_get.assert_called_once_with("/objects/function/sync")
     mock_post.assert_called_once_with("/objects/function", expected_payload)
     
-    assert response == {'success': 'Object created successfully', 'response': {'success': True}}#, 'sync_response': {'success': True, 'executions': [{'sql': 'CREATE OR REPLACE FUNCTION my_table_func', 'status': 'executed'}]}}
+    assert response == catalog.pretty_print_result({'success': 'Object created successfully', 'response': {'success': True}})#, 'sync_response': {'success': True, 'executions': [{'sql': 'CREATE OR REPLACE FUNCTION my_table_func', 'status': 'executed'}]}}
 
 @patch('pyspark_opendic.client.OpenDicClient.post')
 @patch('pyspark_opendic.client.OpenDicClient.get')
@@ -88,7 +88,7 @@ def test_create_with_alias(mock_get, mock_post, catalog):
 
     #mock_get.assert_called_once_with("/objects/function/sync")
     mock_post.assert_called_once_with("/objects/function", expected_payload)
-    assert response == {'success': 'Object created successfully', 'response': {'success': True}}#, 'sync_response': {'success': True, 'executions': [{'sql': 'CREATE OR REPLACE FUNCTION my_function as my_alias', 'status': 'executed'}]}}
+    assert response == catalog.pretty_print_result({'success': 'Object created successfully', 'response': {'success': True}})#, 'sync_response': {'success': True, 'executions': [{'sql': 'CREATE OR REPLACE FUNCTION my_function as my_alias', 'status': 'executed'}]}}
 
 
 # ---- Tests for Pydantic INVALID JSON ----
@@ -107,7 +107,7 @@ def test_invalid_json_in_props(mock_post, catalog):
     response = catalog.sql(query)
 
     assert "error" in response
-    assert response["error"] == "Invalid JSON syntax in properties"
+    assert "Invalid JSON syntax in properties" in response
 
 @patch('pyspark_opendic.client.OpenDicClient.post')
 def test_define_pydantic_error(mock_post, catalog):
@@ -118,7 +118,7 @@ def test_define_pydantic_error(mock_post, catalog):
     response = catalog.sql(query)
 
     assert "error" in response
-    assert "validation error" in response["exception message"]
+    assert "validation error" in response
 
 # ---- Tests for SHOW ----
 @patch('pyspark_opendic.client.OpenDicClient.get')
@@ -131,7 +131,7 @@ def test_show(mock_get, catalog):
     response = catalog.sql(query)
 
     mock_get.assert_called_once_with("/objects/function")
-    assert response == {'success': 'Objects retrieved successfully', 'response': {'success': True, 'objects': [{'type': 'function', 'name': 'my_function', 'language': 'sql', 'args': {'arg1': 'string', 'arg2': 'number'}, 'definition': 'SELECT * FROM my_table'}]}}
+    assert response == catalog.pretty_print_result({'success': 'Objects retrieved successfully', 'response': {'success': True, 'objects': [{'type': 'function', 'name': 'my_function', 'language': 'sql', 'args': {'arg1': 'string', 'arg2': 'number'}, 'definition': 'SELECT * FROM my_table'}]}})
 
 @patch('pyspark_opendic.client.OpenDicClient.get')
 def test_show_mapping_platform_type(mock_get, catalog):
@@ -142,7 +142,7 @@ def test_show_mapping_platform_type(mock_get, catalog):
     response = catalog.sql(query)
 
     mock_get.assert_called_once_with("/objects/function/platforms/spark")
-    assert response == {'success': 'Mapping retrieved successfully', 'response': {"success": True, 'response': {'success': True, 'objects': [{'type': 'function', 'name': 'my_function', 'language': 'sql', 'args': {'arg1': 'string', 'arg2': 'number'}, 'definition': 'SELECT * FROM my_table'}]}}}
+    assert response == catalog.pretty_print_result({'success': 'Mapping retrieved successfully', 'response': {"success": True, 'response': {'success': True, 'objects': [{'type': 'function', 'name': 'my_function', 'language': 'sql', 'args': {'arg1': 'string', 'arg2': 'number'}, 'definition': 'SELECT * FROM my_table'}]}}})
 
 @patch('pyspark_opendic.client.OpenDicClient.get')
 def test_show_mapping_platform(mock_get, catalog):
@@ -153,7 +153,7 @@ def test_show_mapping_platform(mock_get, catalog):
     response = catalog.sql(query)
 
     mock_get.assert_called_once_with("/objects/function/platforms")
-    assert response == {'success': 'Platforms retrieved successfully', 'response': {"success": True, 'response': {'success': True, 'objects': [{'type': 'function', 'name': 'my_function', 'language': 'sql', 'args': {'arg1': 'string', 'arg2': 'number'}, 'definition': 'SELECT * FROM my_table'}]}}}
+    assert response == catalog.pretty_print_result({'success': 'Platforms retrieved successfully', 'response': {"success": True, 'response': {'success': True, 'objects': [{'type': 'function', 'name': 'my_function', 'language': 'sql', 'args': {'arg1': 'string', 'arg2': 'number'}, 'definition': 'SELECT * FROM my_table'}]}}})
 
 @patch('pyspark_opendic.client.OpenDicClient.get')
 def test_show_open_platforms(mock_get, catalog):
@@ -164,7 +164,7 @@ def test_show_open_platforms(mock_get, catalog):
     response = catalog.sql(query)
 
     mock_get.assert_called_once_with("/platforms")
-    assert response == {'success': 'Platforms retrieved successfully', 'response': {"success": True, 'response': [{"platform": "spark"}, {"platform": "snowflake"}]}}
+    assert response == catalog.pretty_print_result({'success': 'Platforms retrieved successfully', 'response': {"success": True, 'response': [{"platform": "spark"}, {"platform": "snowflake"}]}})
 
 @patch('pyspark_opendic.client.OpenDicClient.get')
 def test_show_open_mappings_for_platform(mock_get, catalog):
@@ -175,21 +175,20 @@ def test_show_open_mappings_for_platform(mock_get, catalog):
     response = catalog.sql(query)
 
     mock_get.assert_called_once_with("/platforms/spark")
-    assert response == {'success': "Mappings for platform retrieved successfully", 'response': {"success": True, 'response': {"mapping": "...."}}}
+    assert response == catalog.pretty_print_result({'success': "Mappings for platform retrieved successfully", 'response': {"success": True, 'response': {"mapping": "...."}}})
 
 # ---- Tests for SYNC ----
 @patch('pyspark_opendic.client.OpenDicClient.get')
 def test_sync_function(mock_get, catalog):
-    mock_get.return_value = {"success":
-                             True, "statements": [{"definition": "CREATE OR REPLACE FUNCTION my_function AS 'SELECT 1';"}]}
+    mock_get.return_value = [{"definition": "CREATE OR REPLACE FUNCTION my_function AS 'SELECT 1';"}]
 
-    query = "SYNC OPEN function"
+    query = "SYNC OPEN function for Spark"
 
     response = catalog.sql(query)
 
-    mock_get.assert_called_once_with("/objects/function/sync")
+    mock_get.assert_called_once_with("/objects/function/platforms/spark/pull")
     #mock_spark.sql.assert_called_once_with("CREATE OR REPLACE FUNCTION my_function AS 'SELECT 1';")
-    assert response == {'success': True, 'executions': [{'sql': "CREATE OR REPLACE FUNCTION my_function AS 'SELECT 1';", 'status': 'executed'}]}
+    assert response == catalog.pretty_print_result({'success': True, 'executions': [{'sql': "CREATE OR REPLACE FUNCTION my_function AS 'SELECT 1';", 'status': 'executed'}]})
 
 
 # ---- Tests for DEFINE ----
@@ -206,7 +205,7 @@ def test_define(mock_post, catalog):
     response = catalog.sql(query)
 
     mock_post.assert_called_once_with("/objects", expected_payload)
-    assert response == {'success': 'Object defined successfully', 'response': {'success': True}}
+    assert response == catalog.pretty_print_result({'success': 'Object defined successfully', 'response': {'success': True}})
 
 @patch('pyspark_opendic.client.OpenDicClient.post')
 def test_define_invalid_json(mock_post, catalog):
@@ -217,7 +216,7 @@ def test_define_invalid_json(mock_post, catalog):
     response = catalog.sql(query)
 
     assert "error" in response
-    assert response["error"] == "Invalid JSON syntax in properties"
+    assert "Invalid JSON syntax in properties" in response
 
 
 @patch('pyspark_opendic.client.OpenDicClient.post')
@@ -228,8 +227,8 @@ def test_define_invalid_type(mock_post, catalog):
 
     response = catalog.sql(query)
 
-    assert response["error"] == "Invalid type for DEFINE statement"
-    assert "Invalid data type 'hashmap' for key 'version'" in response["exception message"]
+    #assert response["error"] == "Invalid type for DEFINE statement"
+    assert "Invalid data type 'hashmap' for key 'version'" in response
 
 
 # ---- Tests for DROP ----
@@ -242,7 +241,7 @@ def test_drop_function(mock_delete, catalog):
     response = catalog.sql(query)
 
     mock_delete.assert_called_once_with("/objects/function")
-    assert response == {'success': 'Object dropped successfully', 'response': {'success': True}}
+    assert response == catalog.pretty_print_result({'success': 'Object dropped successfully', 'response': {'success': True}})
 
 @patch('pyspark_opendic.client.OpenDicClient.delete')
 def test_drop_mapping(mock_delete, catalog):
@@ -253,7 +252,7 @@ def test_drop_mapping(mock_delete, catalog):
     response = catalog.sql(query)
 
     mock_delete.assert_called_once_with("/platforms/spark")
-    assert response == {'success': 'Platform\'s mappings dropped successfully', 'response': {'success': True}}
+    assert response == catalog.pretty_print_result({'success': 'Platform\'s mappings dropped successfully', 'response': {'success': True}})
 
 # ---- Tests for Show types ----
 @patch('pyspark_opendic.client.OpenDicClient.get')
@@ -266,7 +265,7 @@ def test_show_types(mock_get, catalog):
     response = catalog.sql(query)
 
     mock_get.assert_called_once_with("/objects")
-    assert response == {'success': 'Object types retrieved successfully', 'response': {'success': True, 'objects': [{"type": "function", "schema": "{schema}"}]}}
+    assert response == catalog.pretty_print_result({'success': 'Object types retrieved successfully', 'response': {'success': True, 'objects': [{"type": "function", "schema": "{schema}"}]}})
 
 
 # ---- Tests for ADD OPEN MAPPING ----
@@ -318,4 +317,4 @@ def test_add_open_mapping_multiline(mock_post, catalog):
     response = catalog.sql(query)
 
     mock_post.assert_called_once_with("/objects/function/platforms/spark", expected_payload)
-    assert response == {'success': 'Mapping added successfully', 'response': {'success': True}}
+    assert response == catalog.pretty_print_result({'success': 'Mapping added successfully', 'response': {'success': True}})

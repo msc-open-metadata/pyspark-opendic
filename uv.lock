@@ -349,7 +349,7 @@ sdist = { url = "https://files.pythonhosted.org/packages/5f/8f/b616ef710932ccdba
 
 [[package]]
 name = "pyspark-opendic"
-version = "0.2.4"
+version = "0.2.7"
 source = { editable = "." }
 dependencies = [
     { name = "pydantic" },
