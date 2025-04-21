@@ -1,8 +1,7 @@
 from typing import Any
 import requests
-import json
 
-# TODO: Find a better way to handle the url
+
 class OpenDicClient:
     def __init__(self, api_url : str, credentials : str) -> None:
         self.api_url : str = api_url

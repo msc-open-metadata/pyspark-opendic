@@ -6,8 +6,8 @@ class Udo(BaseModel):
     type: str
     name: str
     props: Optional[dict[str, Any]] = None
-    createTimestamp: Optional[int] = None
-    lastUpdateTimestamp: Optional[int] = None
+    createdTimestamp: Optional[str] = None
+    lastUpdatedTimestamp: Optional[str] = None
     entityVersion: Optional[int] = None
 
 class Udos(BaseModel):

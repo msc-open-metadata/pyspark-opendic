@@ -1,12 +1,13 @@
 import json
-import pprint
 import re
 from typing import Any
 from pydantic import ValidationError
 import requests
 from pyspark.sql import SparkSession
 from pyspark.sql.catalog import Catalog
+import pandas as pd
 
+from pyspark_opendic.prettyResponse import PrettyResponse
 from pyspark_opendic.client import OpenDicClient
 from pyspark_opendic.model.openapi_models import (
     CreatePlatformMappingRequest,
@@ -16,7 +17,6 @@ from pyspark_opendic.model.openapi_models import (
     Statement,
     Udo,
 )
-
 
 class OpenDicCatalog(Catalog):
     def __init__(self, sparkSession : SparkSession, api_url : str):
@@ -194,7 +194,7 @@ class OpenDicCatalog(Catalog):
                 # sync_response = self.client.get(f"/objects/{object_type}/sync")
                 # dump_handler_response = self.dump_handler(sync_response) # TODO: we should probably parse this to the PullStatements model we have for consistency and readability? not that important
             except requests.exceptions.HTTPError as e:
-                return self.pretty_print_result({"error": "HTTP Error", "exception message": str(e), "Catalog Response": response})
+                return self.pretty_print_result({"error": "HTTP Error", "exception message": str(e), "Catalog Response": e.response.json()})
             except ValidationError as e:
                 return self.pretty_print_result({"error": "Error creating object", "exception message": str(e)})
             except json.JSONDecodeError as e:
@@ -210,7 +210,7 @@ class OpenDicCatalog(Catalog):
             try:
                 response = self.client.get("/objects")
             except requests.exceptions.HTTPError as e:
-                return self.pretty_print_result({"error": "HTTP Error", "exception message": str(e), "Catalog Response": response})
+                return self.pretty_print_result({"error": "HTTP Error", "exception message": str(e), "Catalog Response": e.response.json()})
 
             return self.pretty_print_result({"success": "Object types retrieved successfully", "response": response})
         
@@ -218,7 +218,7 @@ class OpenDicCatalog(Catalog):
             try:
                 response = self.client.get("/platforms")
             except requests.exceptions.HTTPError as e:
-                return self.pretty_print_result({"error": "HTTP Error", "exception message": str(e), "Catalog Response": response})
+                return self.pretty_print_result({"error": "HTTP Error", "exception message": str(e), "Catalog Response": e.response.json()})
 
             return self.pretty_print_result({"success": "Platforms retrieved successfully", "response": response})
         
@@ -227,7 +227,7 @@ class OpenDicCatalog(Catalog):
             try:
                 response = self.client.get(f"/platforms/{platform}")
             except requests.exceptions.HTTPError as e:
-                return self.pretty_print_result({"error": "HTTP Error", "exception message": str(e), "Catalog Response": response})
+                return self.pretty_print_result({"error": "HTTP Error", "exception message": str(e), "Catalog Response": e.response.json()})
 
             return self.pretty_print_result({"success": "Mappings for platform retrieved successfully", "response": response})
         
@@ -237,7 +237,7 @@ class OpenDicCatalog(Catalog):
             try:
                 response = self.client.delete(f"/platforms/{platform}")
             except requests.exceptions.HTTPError as e:
-                return self.pretty_print_result({"error": "HTTP Error", "exception message": str(e), "Catalog Response": response})
+                return self.pretty_print_result({"error": "HTTP Error", "exception message": str(e), "Catalog Response": e.response.json()})
 
             return self.pretty_print_result({"success": "Platform's mappings dropped successfully", "response": response})
 
@@ -246,7 +246,7 @@ class OpenDicCatalog(Catalog):
             try :
                 response = self.client.get(f"/objects/{object_type}")
             except requests.exceptions.HTTPError as e:
-                return self.pretty_print_result({"error": "HTTP Error", "exception message": str(e), "Catalog Response": response})
+                return self.pretty_print_result({"error": "HTTP Error", "exception message": str(e), "Catalog Response": e.response.json()})
 
             return self.pretty_print_result({"success": "Objects retrieved successfully", "response": response})
         
@@ -256,7 +256,7 @@ class OpenDicCatalog(Catalog):
             try:
                 response = self.client.get(f"/objects/{object_type}/platforms/{platform}")
             except requests.exceptions.HTTPError as e:
-                return self.pretty_print_result({"error": "HTTP Error", "exception message": str(e), "Catalog Response": response})
+                return self.pretty_print_result({"error": "HTTP Error", "exception message": str(e), "Catalog Response": e.response.json()})
             
             return self.pretty_print_result({"success": "Mapping retrieved successfully", "response": response})
         
@@ -265,7 +265,7 @@ class OpenDicCatalog(Catalog):
             try:
                 response = self.client.get(f"/objects/{object_type}/platforms")
             except requests.exceptions.HTTPError as e:
-                return self.pretty_print_result({"error": "HTTP Error", "exception message": str(e), "Catalog Response": response})
+                return self.pretty_print_result({"error": "HTTP Error", "exception message": str(e), "Catalog Response": e.response.json()})
 
             return self.pretty_print_result({"success": "Platforms retrieved successfully", "response": response})
 
@@ -278,7 +278,7 @@ class OpenDicCatalog(Catalog):
                 response = self.client.get(f"/objects/{object_type}/platforms/{platform}/pull")
                 statements = [Statement.model_validate(item) for item in response]
             except requests.exceptions.HTTPError as e:
-                return self.pretty_print_result({"error": "HTTP Error", "exception message": str(e), "Catalog Response": response})
+                return self.pretty_print_result({"error": "HTTP Error", "exception message": str(e), "Catalog Response": e.response.json()})
             except ValidationError as e:
                 return self.pretty_print_result({"error": "Error validating request model (pydantic)", "exception message": str(e)})
 
@@ -298,6 +298,7 @@ class OpenDicCatalog(Catalog):
                 payload = define_request.model_dump()
                 # Send Request
                 response = self.client.post("/objects", payload)
+                
                 return self.pretty_print_result({"success": "Object defined successfully", "response": response})
             except json.JSONDecodeError as e:
                 return self.pretty_print_result({
@@ -307,7 +308,7 @@ class OpenDicCatalog(Catalog):
             except ValueError as e:
                 return self.pretty_print_result({"error": "Invalid type for DEFINE statement", "exception message": str(e)})
             except requests.exceptions.HTTPError as e:
-                return self.pretty_print_result({"error": "HTTP Error", "exception message": str(e), "Catalog Response": response})
+                return self.pretty_print_result({"error": "HTTP Error", "exception message": str(e), "Catalog Response": e.response.json()})
             except ValidationError as e:
                 return self.pretty_print_result({"error": "Error defining object", "exception message": str(e)})
 
@@ -318,7 +319,7 @@ class OpenDicCatalog(Catalog):
             try:
                 response = self.client.delete(f"/objects/{object_type}")
             except requests.exceptions.HTTPError as e:
-                return self.pretty_print_result({"error": "HTTP Error", "exception message": str(e), "Catalog Response": response})
+                return self.pretty_print_result({"error": "HTTP Error", "exception message": str(e), "Catalog Response": e.response.json()})
 
             return self.pretty_print_result({"success": "Object dropped successfully", "response": response})
 
@@ -355,7 +356,7 @@ class OpenDicCatalog(Catalog):
             except ValidationError as e:
                 return self.pretty_print_result({"error": "Error validating request model (pydantic)", "exception message": str(e)})
             except requests.exceptions.HTTPError as e:
-                return self.pretty_print_result({"Exception message": str(e), "Catalog Response": response})
+                return self.pretty_print_result({"error": "HTTP Error", "exception message": str(e), "Catalog Response": e.response.json()})
 
             return self.pretty_print_result({"success": "Mapping added successfully", "response": response})
 
@@ -407,8 +408,17 @@ class OpenDicCatalog(Catalog):
             
         return {"success": "Data types validated successfully"}
 
-    def pretty_print_result(self, result : dict) -> str:
+    def pretty_print_result(self, result: dict):
         """
-        Pretty prints the result dictionary as a JSON formatted string.
+        Pretty print the result in a readable format.
         """
-        return json.dumps(result, indent=4, default=str)
+        response = result.get("response")
+
+        # Polaris-spec-compliant "good" responses, so objects or lists of objects
+        if isinstance(response, list) and all(isinstance(item, dict) for item in response):
+            return pd.DataFrame(response)
+        elif isinstance(response, dict):
+            return pd.DataFrame([response])
+
+        # Everything else — errors, messages, etc.
+        return PrettyResponse(result)
