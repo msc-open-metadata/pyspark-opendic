@@ -153,6 +153,15 @@ class OpenDicCatalog(Catalog):
             r"$"                                              # End of string
         )
 
+        opendic_alter_pattern: re.Pattern = (
+            r"^alter"
+            r"\s+open\s+(?P<object_type>\w+)"               # Required object type after "open"
+            r"\s+(?P<name>\w+)"                             # Required name of the object
+            r"(?:\s+props\s*(?P<properties>\{[\s\S]*\}))?"  # Optional props with JSON inside {}
+            r"$"
+        )
+
+
 
 
 
@@ -169,7 +178,7 @@ class OpenDicCatalog(Catalog):
         show_mapping_for_object_and_platform_match = re.match(opendic_show_mapping_for_object_and_platform_pattern, query_cleaned, re.IGNORECASE)
         show_platforms_for_object_match = re.match(opendic_show_platforms_for_object_pattern, query_cleaned, re.IGNORECASE)
         add_mapping_match = re.match(opendic_add_mapping_pattern, query_cleaned, re.IGNORECASE | re.DOTALL)
-        
+        alter_match = re.match(opendic_alter_pattern, query_cleaned, re.IGNORECASE)
 
         if create_match:
             object_type = create_match.group('object_type')
@@ -190,9 +199,7 @@ class OpenDicCatalog(Catalog):
 
                 # Send Request
                 response = self.client.post(f"/objects/{object_type}", payload)
-                # Sync the object of said type after creation
-                # sync_response = self.client.get(f"/objects/{object_type}/sync")
-                # dump_handler_response = self.dump_handler(sync_response) # TODO: we should probably parse this to the PullStatements model we have for consistency and readability? not that important
+
             except requests.exceptions.HTTPError as e:
                 return self.pretty_print_result({"error": "HTTP Error", "exception message": str(e), "Catalog Response": e.response.json()})
             except ValidationError as e:
@@ -204,7 +211,35 @@ class OpenDicCatalog(Catalog):
                 })
             
             return self.pretty_print_result({"success": "Object created successfully", "response": response})
-                    # , "sync_response": dump_handler_response}
+        
+        elif alter_match:
+            object_type = alter_match.group('object_type')
+            name = alter_match.group('name')
+            properties = alter_match.group('properties')
+
+            try:
+                alter_props: dict[str, str] = json.loads(properties) if properties else None
+            
+                # Build Udo and CreateUdoRequest Pydantic models            
+                udo_object = Udo(type=object_type, name=name, props=alter_props)
+                alter_request = CreateUdoRequest(udo=udo_object)
+                
+                # Serialize to JSON
+                payload = alter_request.model_dump()
+
+                # Send Request
+                response = self.client.put(f"/objects/{object_type}", payload)
+            except requests.exceptions.HTTPError as e:
+                return self.pretty_print_result({"error": "HTTP Error", "exception message": str(e), "Catalog Response": e.response.json()})
+            except ValidationError as e:
+                return self.pretty_print_result({"error": "Error altering object", "exception message": str(e)})
+            except json.JSONDecodeError as e:
+                return self.pretty_print_result({
+                    "error": "Invalid JSON syntax in properties",
+                    "details": {"sql": sqlText, "exception_message": str(e)}
+                })
+            
+            return self.pretty_print_result({"success": "Object altered successfully", "response": response})
 
         elif show_types_match:
             try:
