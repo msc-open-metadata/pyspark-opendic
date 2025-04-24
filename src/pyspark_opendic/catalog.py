@@ -38,12 +38,12 @@ class OpenDicCatalog(Catalog):
         for command_type, pattern in self.opendic_patterns:
             match = pattern.match(sql_cleaned)
             if match:
-                return self._handle_opendic_command(command_type, match, sql_text)
+                return self._handle_opendic_command(command_type, match)
 
         # Fallback to native Spark SQL if no OpenDic match
         return self.sparkSession.sql(sql_text)
 
-    def _handle_opendic_command(self, command_type: str, match: re.Match, sql_text: str):
+    def _handle_opendic_command(self, command_type: str, match: re.Match):
         try:
             # Syntax: CREATE [OR REPLACE] [TEMPORARY] OPEN <object_type> <name> [IF NOT EXISTS] [AS <alias>] [PROPS { <properties> }]
             if command_type == "create":
@@ -180,7 +180,7 @@ class OpenDicCatalog(Catalog):
         except json.JSONDecodeError as e:
             return self.pretty_print_result({
                 "error": "Invalid JSON syntax in properties",
-                "details": {"sql": sql_text, "exception_message": str(e)}
+                "details": {"sql": "", "exception_message": str(e)}
             })
         except requests.exceptions.HTTPError as e:
             return self.pretty_print_result({
