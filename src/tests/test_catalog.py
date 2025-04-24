@@ -374,7 +374,7 @@ def test_alter_with_props(mock_put, catalog):
 
     response = catalog.sql(query)
 
-    mock_put.assert_called_once_with("/objects/function", expected_payload)
+    mock_put.assert_called_once_with("/objects/function/my_function", expected_payload)
     assert_catalog_response_equal(response, {
         "success": "Object altered successfully",
         "response": {"success": True}

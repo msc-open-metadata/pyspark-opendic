@@ -242,7 +242,7 @@ class OpenDicCatalog(Catalog):
                 payload = alter_request.model_dump()
 
                 # Send Request
-                response = self.client.put(f"/objects/{object_type}", payload)
+                response = self.client.put(f"/objects/{object_type}/{name}", payload)
             except requests.exceptions.HTTPError as e:
                 return self.pretty_print_result({"error": "HTTP Error", "exception message": str(e), "Catalog Response": e.response.json()})
             except ValidationError as e:
