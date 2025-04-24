@@ -1,6 +1,7 @@
 import json
 import re
 from typing import Any
+import ast
 
 import pandas as pd
 import requests
@@ -215,16 +216,23 @@ class OpenDicCatalog(Catalog):
 
         execution_results = []
         for statement in response:
-            sql_text = statement.definition.strip()  # Extract SQL statement from the response
+            sql_text = statement.definition.strip()  # Raw SQL string
+
+            try:
+                # Decode escaped characters and remove quotes with ast
+                sql_text = ast.literal_eval(sql_text)
+            except (ValueError, SyntaxError):
+                # keep raw string if it’s not a valid literal
+                pass
+
             if sql_text:
                 try:
-                    result = self.sparkSession.sql(sql_text)  # Execute in Spark
+                    result = self.sparkSession.sql(sql_text)
                     execution_results.append({"sql": sql_text, "status": "executed"})
                 except Exception as e:
                     execution_results.append({"sql": sql_text, "status": "failed", "error": str(e)})
 
         return self.pretty_print_result({"success": True, "executions": execution_results})
-
     def validate_data_type(self, props: dict[str, str]) -> dict[str, str]:
         """
         Validate the data type against a predefined set of valid types.
