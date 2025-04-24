@@ -1,5 +1,6 @@
 import json
 import re
+import textwrap
 from typing import Any
 import ast
 
@@ -215,24 +216,28 @@ class OpenDicCatalog(Catalog):
             return self.pretty_print_result({"error": "No statements found in response"})
 
         execution_results = []
+
+        print(f"Executing {len(response)} SQL statements...\n")
         for statement in response:
-            sql_text = statement.definition.strip()  # Raw SQL string
+            sql_text = statement.definition
+            
+            # Normalizes indentation (keep relative indents! - should work with the initial indentation of the SQL statement we discussed)
+            formatted_sql = textwrap.dedent(sql_text).strip()
+            print(f"Formatted SQL:\n{formatted_sql}")
 
+
+            # Wrap in triple quotes (this just shouldnt be necessary.. xd - outcomment this first, Andreas)
+            multiline_sql = f'''"""\n{formatted_sql}\n"""'''
+            print(f"Executing SQL (multilined SQL): \n{multiline_sql}")
+            # Execute
             try:
-                # Decode escaped characters and remove quotes with ast
-                sql_text = ast.literal_eval(sql_text)
-            except (ValueError, SyntaxError):
-                # keep raw string if it’s not a valid literal
-                pass
+                result = self.sparkSession.sql(multiline_sql)
+                execution_results.append({"sql": multiline_sql, "status": "executed"})
+            except Exception as e:
+                execution_results.append({"sql": formatted_sql, "status": "failed", "error": str(e)})
 
-            if sql_text:
-                try:
-                    result = self.sparkSession.sql(sql_text)
-                    execution_results.append({"sql": sql_text, "status": "executed"})
-                except Exception as e:
-                    execution_results.append({"sql": sql_text, "status": "failed", "error": str(e)})
+        return self.pretty_print_result({"executions": execution_results})
 
-        return self.pretty_print_result({"success": True, "executions": execution_results})
     def validate_data_type(self, props: dict[str, str]) -> dict[str, str]:
         """
         Validate the data type against a predefined set of valid types.

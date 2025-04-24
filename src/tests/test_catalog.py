@@ -203,7 +203,6 @@ def test_sync_function(mock_get, catalog):
 
     response = catalog.sql(query)
     expected = {
-        "success": True,
         "executions": [{
             "sql": "CREATE OR REPLACE FUNCTION my_function AS 'SELECT 1';",
             "status": "executed"
@@ -379,6 +378,22 @@ def test_alter_with_props(mock_put, catalog):
         "success": "Object altered successfully",
         "response": {"success": True}
     })
+
+def test_dump_handler_invalid_escaped_sql(catalog):
+    # This simulates a Polaris sync returning back a weirdly escaped SQL string
+    # (same style as what we saw in the screenshot)
+    escaped_sql = "CREATE OR ALTER function foo(arg1 int, arg2 int)\n    RETURNS int\n    LANGUAGE python\n    PACKAGES = ('pandas', 'numpy')\n    RUNTIME = 3.12\n    HANDLER = 'foo'\n    AS $$\n    def foo(arg1, arg2):\n      return arg1 + arg2\n    $$\n"
+
+    response = [
+        Statement(definition=escaped_sql)
+    ]
+
+    result = catalog.dump_handler(response)
+
+    print(result)  # If you want to visually inspect output
+    assert isinstance(result, PrettyResponse)
+    #assert "error" in str(result)
+
 
 
 # Helper function to assert catalog response equality (based on our 'Pretty Printing')
