@@ -136,6 +136,13 @@ class OpenDicCatalog(Catalog):
                 response = self.client.get(f"/objects/{object_type}/platforms/{platform}/pull")
                 statements = [Statement.model_validate(item) for item in response]
                 return self.dump_handler(statements)
+            
+            # Syntax: SYNC OPEN OBJECTS FOR <platform>
+            elif command_type == "sync_all":
+                platform: str = match.group("platform").lower()
+                response = self.client.get(f"/platforms/{platform}/pull")
+                statements = [Statement.model_validate(item) for item in response]
+                return self.dump_handler(statements)
 
             # Syntax: DEFINE OPEN <udoType> PROPS { <properties> }
             elif command_type == "define":

@@ -204,13 +204,30 @@ def test_sync_function(mock_get, catalog):
     response = catalog.sql(query)
     expected = {
         "executions": [{
-            "sql": "CREATE OR REPLACE FUNCTION my_function AS 'SELECT 1';",
+            "sql": "\"\"\"\nCREATE OR REPLACE FUNCTION my_function AS 'SELECT 1';\n\"\"\"",
             "status": "executed"
         }]
     }   
 
     mock_get.assert_called_once_with("/objects/function/platforms/spark/pull")
     #mock_spark.sql.assert_called_once_with("CREATE OR REPLACE FUNCTION my_function AS 'SELECT 1';")
+    assert_catalog_response_equal(response, expected)
+
+@patch('pyspark_opendic.client.OpenDicClient.get')
+def test_sync_all_objects_for_platform(mock_get, catalog):
+    mock_get.return_value = [{"definition": "CREATE OR REPLACE FUNCTION my_function AS 'SELECT 1';"}]
+
+    query = "SYNC OPEN OBJECTS FOR Spark"
+
+    response = catalog.sql(query)
+    expected = {
+        "executions": [{
+            "sql": "\"\"\"\nCREATE OR REPLACE FUNCTION my_function AS 'SELECT 1';\n\"\"\"",
+            "status": "executed"
+        }]
+    }
+
+    mock_get.assert_called_once_with("/platforms/spark/pull")
     assert_catalog_response_equal(response, expected)
 
 

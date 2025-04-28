@@ -37,11 +37,23 @@ class OpenDicPatterns:
     @staticmethod
     def sync():
         return (
-            r"^sync"  # "sync" at the start
-            r"\s+open\s+(?P<object_type>\w+)\s+for"  # "open platforms for"
-            r"\s+(?P<platform>\w+)"  # Object type (e.g., function)
-            r"$"  # End of string
+            r"^sync"
+            r"\s+open\s+(?P<object_type>(?!objects$)\w+)"  # <<< negated lookahead to exclude 'objects'
+            r"\s+for"
+            r"\s+(?P<platform>\w+)"
+            r"$"
         )
+    
+    # Syntax: SYNC OPEN OBJECTS FOR <platform>
+    @staticmethod
+    def sync_all_objects_for_platform():
+        return (
+            r"^sync"  # "sync" at the start
+            r"\s+open\s+objects\s+for"
+            r"\s+(?P<platform>\w+)"
+            r"$"
+        )
+
 
     # Syntax: DEFINE OPEN <udoType> PROPS { <properties> }
     @staticmethod
@@ -147,6 +159,7 @@ class OpenDicPatterns:
             ("show", re.compile(OpenDicPatterns.show(), re.IGNORECASE)),
             ("show_mapping_for_object_and_platform", re.compile(OpenDicPatterns.show_mapping_for_object_and_platform(), re.IGNORECASE)),
             ("show_platforms_for_object", re.compile(OpenDicPatterns.show_platforms_for_object(), re.IGNORECASE)),
+            ("sync_all", re.compile(OpenDicPatterns.sync_all_objects_for_platform(), re.IGNORECASE)),
             ("sync", re.compile(OpenDicPatterns.sync(), re.IGNORECASE)),
             ("define", re.compile(OpenDicPatterns.define(), re.IGNORECASE)),
             ("drop", re.compile(OpenDicPatterns.drop(), re.IGNORECASE)),
