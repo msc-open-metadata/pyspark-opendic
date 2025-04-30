@@ -96,6 +96,38 @@ def test_create_with_alias(mock_get, mock_post, catalog):
     expected = {'success': 'Object created successfully', 'response': {'success': True}}
     assert_catalog_response_equal(response, expected)
 
+@patch('pyspark_opendic.client.OpenDicClient.post')
+def test_create_batch_with_props(mock_post, catalog):
+    mock_post.return_value = {"success": True}
+
+    query = """
+    CREATE OPEN BATCH function
+    PROPS [
+        { "name": "my_func1", "language": "sql", "args": { "arg1": "string" }, "definition": "SELECT 1" },
+        { "name": "my_func2", "language": "sql", "args": { "arg2": "int" }, "definition": "SELECT 2" }
+    ]
+    """
+
+    expected_payload = [
+        Udo(
+            type="function",
+            name="my_func1",
+            props={"language": "sql", "args": {"arg1": "string"}, "definition": "SELECT 1"}
+        ).model_dump(),
+        Udo(
+            type="function",
+            name="my_func2",
+            props={"language": "sql", "args": {"arg2": "int"}, "definition": "SELECT 2"}
+        ).model_dump()
+    ]
+
+    response = catalog.sql(query)
+
+    mock_post.assert_called_once_with("/objects/function/batch", expected_payload)
+    expected = {'success': 'Batch created', 'response': {'success': True}}
+    assert_catalog_response_equal(response, expected)
+
+
 
 # ---- Tests for Pydantic INVALID JSON ----
 @patch('pyspark_opendic.client.OpenDicClient.post')

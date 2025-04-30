@@ -67,6 +67,19 @@ class OpenDicCatalog(Catalog):
                 response = self.client.post(f"/objects/{object_type}", payload)
 
                 return self.pretty_print_result({"success": "Object created successfully", "response": response})
+           
+            elif command_type == "create_batch":
+                object_type = match.group("object_type")
+                properties_list = json.loads(match.group("properties"))  # Already a list of dicts
+
+                udo_objects: list[dict[str, Any]] = []
+                for item in properties_list:
+                    name = item.pop("name")
+                    udo_object = Udo(type=object_type, name=name, props=item).model_dump()
+                    udo_objects.append(udo_object)
+
+                response = self.client.post(f"/objects/{object_type}/batch", udo_objects)
+                return self.pretty_print_result({"success": "Batch created", "response": response})
 
             # Syntax: ALTER OPEN <object_type> <name> [PROPS { <properties> }]
             elif command_type == "alter":

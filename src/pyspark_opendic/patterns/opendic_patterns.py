@@ -145,11 +145,23 @@ class OpenDicPatterns:
             r"(?:\s+props\s*(?P<properties>\{[\s\S]*\}))?"  # Optional props with JSON inside {}
             r"$"
         )
+    
+    # Syntax: CREATE OPEN BATCH <object_type> PROPS [<properties>]
+    @staticmethod
+    def create_batch():
+        return (
+            r"^create"  # starts with create
+            r"\s+open\s+batch\s+"
+            r"(?P<object_type>\w+)\s+"  # object type (e.g., function)
+            r"props\s+(?P<properties>\[.*\])$"  # list of properties in square brackets (including name)
+        )
+
 
     # Compile all patterns up front with correct flags
     @staticmethod
     def compiled_patterns():
         return [
+            ("create_batch", re.compile(OpenDicPatterns.create_batch(), re.IGNORECASE | re.DOTALL) ),
             ("create", re.compile(OpenDicPatterns.create(), re.IGNORECASE)),
             ("alter", re.compile(OpenDicPatterns.alter(), re.IGNORECASE)),
             ("show_types", re.compile(OpenDicPatterns.show_types(), re.IGNORECASE)),
