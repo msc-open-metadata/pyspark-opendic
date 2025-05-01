@@ -102,7 +102,7 @@ def test_create_batch_with_props(mock_post, catalog):
 
     query = """
     CREATE OPEN BATCH function
-    PROPS [
+    OBJECTS [
         { "name": "my_func1", "language": "sql", "args": { "arg1": "string" }, "definition": "SELECT 1" },
         { "name": "my_func2", "language": "sql", "args": { "arg2": "int" }, "definition": "SELECT 2" }
     ]

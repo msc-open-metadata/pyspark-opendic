@@ -146,14 +146,14 @@ class OpenDicPatterns:
             r"$"
         )
     
-    # Syntax: CREATE OPEN BATCH <object_type> PROPS [<properties>]
+    # Syntax: CREATE OPEN BATCH <object_type> OBJECT[s] [<properties>]
     @staticmethod
     def create_batch():
         return (
             r"^create"  # starts with create
             r"\s+open\s+batch\s+"
             r"(?P<object_type>\w+)\s+"  # object type (e.g., function)
-            r"props\s+(?P<properties>\[.*\])$"  # list of properties in square brackets (including name)
+            r"object?s\s+(?P<properties>\[.*\])$"  # list of properties in square brackets (including name)
         )
 
 
