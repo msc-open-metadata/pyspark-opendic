@@ -27,10 +27,11 @@ class OpenDicCatalog(Catalog):
     def __init__(self, sparkSession: SparkSession, api_url: str):
         self.sparkSession = sparkSession
 
-        credentials = sparkSession.conf.get("spark.sql.catalog.polaris.credential")
-        if credentials is None:
+        self.credentials = sparkSession.conf.get("spark.sql.catalog.polaris.credential")
+        if self.credentials is None:
             raise ValueError("spark.sql.catalog.polaris.credential is not set")
-        self.client = OpenDicClient(api_url, credentials)
+        self.api_url = api_url
+        self.client = OpenDicClient(api_url, self.credentials)
         self.opendic_patterns = OpenDicPatterns.compiled_patterns()
 
     def sql(self, sql_text: str):
@@ -39,12 +40,12 @@ class OpenDicCatalog(Catalog):
         for command_type, pattern in self.opendic_patterns:
             match = pattern.match(sql_cleaned)
             if match:
-                return self._handle_opendic_command(command_type, match)
+                return self._handle_opendic_command(command_type, match, sql_text)
 
         # Fallback to native Spark SQL if no OpenDic match
         return self.sparkSession.sql(sql_text)
 
-    def _handle_opendic_command(self, command_type: str, match: re.Match):
+    def _handle_opendic_command(self, command_type: str, match: re.Match, sql_text: str):
         try:
             # Syntax: CREATE [OR REPLACE] [TEMPORARY] OPEN <object_type> <name> [IF NOT EXISTS] [AS <alias>] [PROPS { <properties> }]
             if command_type == "create":
@@ -204,11 +205,16 @@ class OpenDicCatalog(Catalog):
                 "details": {"sql": "", "exception_message": str(e)}
             })
         except requests.exceptions.HTTPError as e:
-            return self.pretty_print_result({
-                "error": "HTTP Error",
-                "exception message": str(e),
-                "Catalog Response": e.response.json()
-            })
+            # Check if httpcode is 401
+            if e.response.status_code == 401:
+                self.client.refresh_oauth_token(self.credentials)
+                self.sql(sql_text)
+            else:
+                return self.pretty_print_result({
+                    "error": "HTTP Error",
+                    "details": str(e),
+                    "Catalog Response": e.response.json() if e.response else None}
+                )
         except ValidationError as e:
             return self.pretty_print_result({
                 "error": "Validation error",
@@ -237,22 +243,16 @@ class OpenDicCatalog(Catalog):
 
         execution_results = []
 
-        print(f"Executing {len(response)} SQL statements...\n")
         for statement in response:
             sql_text = statement.definition
-            
+
             # Normalizes indentation (keep relative indents! - should work with the initial indentation of the SQL statement we discussed)
             formatted_sql = textwrap.dedent(sql_text).strip()
-            print(f"Formatted SQL:\n{formatted_sql}")
 
-
-            # Wrap in triple quotes (this just shouldnt be necessary.. xd - outcomment this first, Andreas)
-            multiline_sql = f'''"""\n{formatted_sql}\n"""'''
-            print(f"Executing SQL (multilined SQL): \n{multiline_sql}")
-            # Execute
             try:
-                result = self.sparkSession.sql(multiline_sql)
-                execution_results.append({"sql": multiline_sql, "status": "executed"})
+                # Execute the SQL statement using Spark
+                self.sparkSession.sql(formatted_sql)
+                execution_results.append({"sql": formatted_sql, "status": "executed"})
             except Exception as e:
                 execution_results.append({"sql": formatted_sql, "status": "failed", "error": str(e)})
 

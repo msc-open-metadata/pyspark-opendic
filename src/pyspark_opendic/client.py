@@ -14,7 +14,7 @@ class OpenDicClient:
         response.raise_for_status() # Raise an exception if the response is not successful
         return response.json()    
     
-    def get(self, endpoint : str) -> dict[str, Any]:
+    def get(self, endpoint : str):
         url : str = self.api_url + "/opendic/v1" + endpoint
         response : requests.Response = requests.get(url, headers={"Authorization": f"Bearer {self.oauth_token}"})
         response.raise_for_status() # Raise an exception if the response is not successful
@@ -32,6 +32,9 @@ class OpenDicClient:
         response.raise_for_status() # Raise an exception if the response is not successful
         return response.json()
     
+    def refresh_oauth_token(self, credentials:str):
+        self.oauth_token = self.get_polaris_oauth_token(credentials)
+
     # Helper function to get the OAuth token
     def get_polaris_oauth_token(self, credentials:str) -> str:
         client_id = credentials.split(":")[0]

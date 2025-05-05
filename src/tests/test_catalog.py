@@ -47,7 +47,6 @@ def test_create_with_props(mock_get, mock_post, catalog):
 
     response = catalog.sql(query)
 
-    #mock_get.assert_called_once_with("/objects/function/sync")
     mock_post.assert_called_once_with("/objects/function", expected_payload)
     #assert response == {"success": "Object created successfully", "sync response": {"success": True, "objects": [{"type": "function", "name": "my_function", "language": "sql", "args": {"arg1": "string", "arg2": "number"}, "definition": "SELECT * FROM my_table"}]}}
 
@@ -67,7 +66,6 @@ def test_create_without_props(mock_get, mock_post, catalog):
 
     response = catalog.sql(query)
 
-    #mock_get.assert_called_once_with("/objects/function/sync")
     mock_post.assert_called_once_with("/objects/function", expected_payload)
     
     expected = catalog.pretty_print_result({'success': 'Object created successfully', 'response': {'success': True}})
@@ -91,7 +89,6 @@ def test_create_with_alias(mock_get, mock_post, catalog):
 
     response = catalog.sql(query)
 
-    #mock_get.assert_called_once_with("/objects/function/sync")
     mock_post.assert_called_once_with("/objects/function", expected_payload)
     expected = {'success': 'Object created successfully', 'response': {'success': True}}
     assert_catalog_response_equal(response, expected)
@@ -236,7 +233,7 @@ def test_sync_function(mock_get, catalog):
     response = catalog.sql(query)
     expected = {
         "executions": [{
-            "sql": "\"\"\"\nCREATE OR REPLACE FUNCTION my_function AS 'SELECT 1';\n\"\"\"",
+            "sql": "CREATE OR REPLACE FUNCTION my_function AS 'SELECT 1';",
             "status": "executed"
         }]
     }   
@@ -254,7 +251,7 @@ def test_sync_all_objects_for_platform(mock_get, catalog):
     response = catalog.sql(query)
     expected = {
         "executions": [{
-            "sql": "\"\"\"\nCREATE OR REPLACE FUNCTION my_function AS 'SELECT 1';\n\"\"\"",
+            "sql": "CREATE OR REPLACE FUNCTION my_function AS 'SELECT 1';",
             "status": "executed"
         }]
     }
@@ -439,7 +436,7 @@ def test_dump_handler_invalid_escaped_sql(catalog):
 
     result = catalog.dump_handler(response)
 
-    print(result)  # If you want to visually inspect output
+    #print(result)
     assert isinstance(result, PrettyResponse)
     #assert "error" in str(result)
 
